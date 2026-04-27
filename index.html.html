@@ -1,0 +1,3285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Canine Companions Geographic Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
+<style>
+  :root {
+    /* Canine Companions official brand colors */
+    --cc-blue:   #0073FF;
+    --cc-yellow: #FECB00;
+    --cc-grey:   #425563;
+
+    --bg:      #F4F7FB;
+    --surface: #FFFFFF;
+    --border:  #D6E2F0;
+    --text:    #1a2a3a;
+    --muted:   #6b7e8f;
+    --accent:  #0073FF;
+
+    /* 6 region colors — all derived from Canine Companions brand palette */
+    --r1: #0073FF;  /* Northeast   — CC primary blue */
+    --r2: #0050b3;  /* North Central — deep blue */
+    --r3: #FECB00;  /* Southeast   — CC yellow */
+    --r4: #e5a800;  /* South Central — amber gold */
+    --r5: #425563;  /* Southwest   — CC slate grey */
+    --r6: #2e8bc0;  /* Northwest   — sky blue (blue+grey mix) */
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Poppins', sans-serif;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  header {
+    padding: 12px 24px;
+    border-bottom: 3px solid var(--cc-blue);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+    background: var(--surface);
+    box-shadow: 0 2px 8px rgba(0,115,255,0.08);
+  }
+
+  header h1 {
+    font-family: 'Poppins', sans-serif;
+    font-size: 1.25rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--cc-blue);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  header .stats {
+    font-size: 0.72rem;
+    color: var(--muted);
+    display: flex;
+    gap: 0;
+    align-items: center;
+  }
+
+  header .stats span {
+    padding: 0 16px;
+    border-left: 1px solid var(--border);
+  }
+
+  header .stats span:first-child {
+    border-left: none;
+    padding-left: 0;
+  }
+
+  header .stats span strong {
+    color: var(--cc-blue);
+    font-weight: 600;
+  }
+
+  .main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* SIDEBAR */
+  .sidebar {
+    width: 260px;
+    flex-shrink: 0;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .sidebar-top {
+    padding: 14px 14px 0;
+    flex-shrink: 0;
+  }
+
+  /* Filter tabs */
+  .filter-tabs {
+    display: flex;
+    border-bottom: 2px solid var(--border);
+    margin: 12px 0 0;
+  }
+
+  .filter-tab {
+    flex: 1;
+    padding: 8px 6px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    transition: all 0.15s;
+    font-family: 'Poppins', sans-serif;
+  }
+  .filter-tab:hover { color: var(--cc-blue); }
+  .filter-tab.active { color: var(--cc-blue); border-bottom-color: var(--cc-blue); }
+
+  .filter-panel {
+    display: none;
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 14px;
+  }
+  .filter-panel.active { display: flex; flex-direction: column; gap: 4px; }
+
+  .sidebar-bottom {
+    flex-shrink: 0;
+    padding: 14px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .sidebar-section h3 {
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--cc-blue);
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+
+  .region-filter {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .region-btn, .state-btn {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    border: 1px solid transparent;
+    background: transparent;
+    cursor: pointer;
+    color: var(--text);
+    font-family: 'Poppins', sans-serif;
+    font-size: 0.74rem;
+    transition: all 0.15s;
+    text-align: left;
+    width: 100%;
+  }
+
+  .region-btn:hover, .state-btn:hover { background: rgba(0,115,255,0.06); }
+  .region-btn.active { border-color: var(--active-color, var(--cc-blue)); background: var(--active-bg, rgba(0,115,255,0.08)); color: var(--active-color, var(--cc-blue)); font-weight: 600; }
+  .state-btn.active { border-color: var(--cc-blue); background: rgba(0,115,255,0.08); color: var(--cc-blue); font-weight: 600; }
+
+  .region-dot {
+    width: 11px; height: 11px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .state-abbr {
+    font-size: 0.65rem;
+    font-weight: 700;
+    width: 22px;
+    color: var(--muted);
+    flex-shrink: 0;
+  }
+  .state-btn.active .state-abbr { color: var(--cc-blue); }
+
+  .filter-count {
+    margin-left: auto;
+    font-size: 0.66rem;
+    color: var(--muted);
+    font-weight: 400;
+  }
+
+  .state-search {
+    width: 100%;
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-family: 'Poppins', sans-serif;
+    font-size: 0.72rem;
+    color: var(--text);
+    background: #f4f7fb;
+    margin-bottom: 8px;
+    flex-shrink: 0;
+  }
+  .state-search:focus { outline: none; border-color: var(--cc-blue); }
+
+  .state-region-group { margin-bottom: 10px; }
+  .state-region-label {
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-weight: 700;
+    padding: 4px 8px 2px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .state-region-label .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+  /* Active filter chips shown at top of map */
+  .active-filters {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    z-index: 10;
+    pointer-events: none;
+  }
+  .filter-chip {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 3px 10px;
+    font-size: 0.68rem;
+    font-family: 'Poppins', sans-serif;
+    font-weight: 600;
+    color: var(--text);
+    box-shadow: 0 1px 6px rgba(0,0,0,0.1);
+    pointer-events: auto;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.15s;
+  }
+  .filter-chip:hover { background: #f0f4f8; }
+  .filter-chip .chip-dot { width: 8px; height: 8px; border-radius: 50%; }
+  .filter-chip .chip-x { color: var(--muted); margin-left: 2px; }
+
+  .region-count { margin-left: auto; font-size: 0.68rem; color: var(--muted); }
+
+  /* Density scale controls */
+  .density-controls {
+    margin-top: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .density-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .density-label {
+    font-size: 0.65rem;
+    color: var(--muted);
+    width: 54px;
+    flex-shrink: 0;
+    font-weight: 500;
+  }
+
+  .density-slider-wrap {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .density-slider-wrap input[type="range"] {
+    flex: 1;
+    height: 4px;
+    border-radius: 2px;
+    accent-color: var(--cc-blue);
+    cursor: pointer;
+  }
+
+  .density-val {
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--cc-blue);
+    width: 26px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  /* Dynamic context legend */
+  .context-list {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    max-height: 220px;
+    overflow-y: auto;
+  }
+
+  .context-row {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 0.71rem;
+    padding: 4px 6px;
+    border-radius: 5px;
+    cursor: default;
+    transition: background 0.1s;
+  }
+  .context-row:hover { background: rgba(0,115,255,0.05); }
+
+  .context-row .ctx-label {
+    flex: 1;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .context-row .ctx-bar-wrap {
+    width: 48px;
+    height: 6px;
+    background: #e4edf6;
+    border-radius: 3px;
+    flex-shrink: 0;
+    overflow: hidden;
+  }
+
+  .context-row .ctx-bar {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.3s ease;
+  }
+
+  .context-row .ctx-count {
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--text);
+    width: 24px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  .context-row .ctx-count.zero { color: var(--muted); font-weight: 400; }
+
+  .ctx-empty {
+    font-size: 0.68rem;
+    color: var(--muted);
+    font-style: italic;
+    padding: 6px 6px;
+  }
+
+  /* CSV Upload */
+  .upload-area {
+    border: 2px dashed var(--cc-blue);
+    border-radius: 8px;
+    padding: 14px 10px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 0.72rem;
+    color: var(--cc-blue);
+    line-height: 1.6;
+    background: rgba(0,115,255,0.03);
+    font-family: 'Poppins', sans-serif;
+    font-weight: 500;
+  }
+  .upload-area:hover { background: rgba(0,115,255,0.08); }
+
+  .upload-area input { display: none; }
+
+  .upload-hint {
+    font-size: 0.62rem;
+    color: var(--muted);
+    margin-top: 8px;
+    line-height: 1.7;
+  }
+
+  /* Legend */
+  .legend-scale {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .legend-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.7rem;
+    color: var(--muted);
+  }
+
+  .legend-swatch {
+    width: 20px; height: 12px;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+
+  /* MAP */
+  .map-container {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    background: #f0f4f8;
+  }
+
+  #map-svg {
+    width: 100%;
+    height: 100%;
+    transition: none; /* viewBox animated via JS requestAnimationFrame */
+  }
+
+  #zoom-out-btn {
+    position: absolute;
+    bottom: 16px;
+    right: 16px;
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 7px 14px;
+    font-family: 'Poppins', sans-serif;
+    font-size: 0.73rem;
+    font-weight: 600;
+    color: var(--cc-blue);
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0,115,255,0.12);
+    display: none;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.15s;
+    z-index: 10;
+  }
+  #zoom-out-btn:hover { background: #f0f5ff; }
+  #zoom-out-btn.visible { display: flex; }
+
+  .county-path {
+    stroke: #dde6f0;
+    stroke-width: 0.3;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .county-path:hover { opacity: 0.8; stroke-width: 1; }
+
+  .county-path.region-outlined { stroke-width: 0.6; }
+
+  .state-path {
+    fill: none;
+    stroke: #c8d4dc;
+    stroke-width: 0.6;
+    pointer-events: none;
+  }
+
+  .region-boundary {
+    fill: none;
+    pointer-events: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  /* TOOLTIP */
+  #tooltip {
+    position: absolute;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 0.73rem;
+    pointer-events: none;
+    display: none;
+    z-index: 100;
+    max-width: 200px;
+    box-shadow: 0 4px 20px rgba(0,115,255,0.15);
+  }
+  #tooltip .tt-county { font-weight: 600; color: var(--cc-blue); margin-bottom: 4px; font-family: 'Poppins', sans-serif; }
+  #tooltip .tt-state { color: var(--muted); font-size: 0.65rem; margin-bottom: 6px; }
+  #tooltip .tt-clients { color: var(--text); font-weight: 500; }
+  #tooltip .tt-region { color: var(--muted); font-size: 0.65rem; margin-top: 3px; }
+
+  /* Bottom info bar */
+  .infobar {
+    flex-shrink: 0;
+    padding: 7px 20px;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+    font-size: 0.65rem;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    font-family: 'DM Mono', monospace;
+  }
+
+  .infobar .field-map {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .infobar .field-chip {
+    background: #f0f4f8;
+    border-radius: 4px;
+    padding: 2px 7px;
+    color: var(--muted);
+    border: 1px solid var(--border);
+  }
+
+  .infobar .field-chip.mapped {
+    color: #0073FF;
+    background: rgba(0,115,255,0.08);
+    border-color: rgba(0,115,255,0.2);
+  }
+
+  /* Loading overlay */
+  #loading {
+    position: absolute;
+    inset: 0;
+    background: #e8f0f8;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 16px;
+    z-index: 50;
+    font-size: 0.8rem;
+    color: var(--muted);
+    font-family: 'Poppins', sans-serif;
+  }
+
+  .spinner {
+    width: 32px; height: 32px;
+    border: 3px solid var(--border);
+    border-top-color: var(--cc-blue);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Column mapper modal */
+  #col-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(66,85,99,0.5);
+    z-index: 200;
+    align-items: center;
+    justify-content: center;
+  }
+  #col-modal.open { display: flex; }
+
+  .modal-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-top: 4px solid var(--cc-blue);
+    border-radius: 12px;
+    padding: 28px 32px;
+    width: 460px;
+    max-width: 95vw;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 8px 40px rgba(0,115,255,0.15);
+  }
+
+  .modal-box h2 {
+    font-family: 'Poppins', sans-serif;
+    color: var(--cc-blue);
+    font-weight: 700;
+    margin-bottom: 6px;
+  }
+
+  .modal-box p {
+    font-size: 0.72rem;
+    color: var(--muted);
+    margin-bottom: 20px;
+  }
+
+  .map-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+
+  .map-row label {
+    font-size: 0.72rem;
+    width: 110px;
+    color: var(--text);
+    font-weight: 500;
+  }
+
+  .map-row select {
+    flex: 1;
+    background: #f4f7fb;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    padding: 7px 10px;
+    font-family: 'Poppins', sans-serif;
+    font-size: 0.72rem;
+    cursor: pointer;
+  }
+
+  .region-map-section {
+    margin-top: 20px;
+    border-top: 2px solid var(--cc-yellow);
+    padding-top: 16px;
+  }
+
+  .region-map-section h4 {
+    font-size: 0.72rem;
+    color: var(--cc-grey);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-weight: 600;
+    margin-bottom: 12px;
+  }
+
+  .region-name-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+
+  .region-name-row .dot {
+    width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+  }
+
+  .region-name-row input {
+    flex: 1;
+    background: #f4f7fb;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    padding: 6px 10px;
+    font-family: 'Poppins', sans-serif;
+    font-size: 0.72rem;
+  }
+
+  .modal-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 22px;
+    justify-content: flex-end;
+  }
+
+  .btn {
+    padding: 8px 18px;
+    border-radius: 7px;
+    border: 1px solid var(--border);
+    font-family: 'Poppins', sans-serif;
+    font-size: 0.74rem;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-weight: 500;
+  }
+
+  .btn-primary {
+    background: var(--cc-blue);
+    color: #fff;
+    border-color: var(--cc-blue);
+  }
+  .btn-primary:hover { background: #005fcc; }
+  .btn-secondary { background: transparent; color: var(--muted); }
+  .btn-secondary:hover { color: var(--text); }
+
+  /* Error message */
+  .error-msg {
+    background: rgba(220,50,50,0.08);
+    border: 1px solid rgba(220,50,50,0.3);
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 0.7rem;
+    color: #c0392b;
+    margin-top: 10px;
+    display: none;
+  }
+
+  /* County client panel */
+  #county-panel {
+    position: absolute;
+    top: 0;
+    right: -320px;
+    width: 300px;
+    height: 100%;
+    background: white;
+    border-left: 1px solid var(--border);
+    box-shadow: -4px 0 24px rgba(0,115,255,0.1);
+    display: flex;
+    flex-direction: column;
+    z-index: 20;
+    transition: right 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  #county-panel.open { right: 0; }
+
+  .county-panel-header {
+    padding: 16px 16px 12px;
+    border-bottom: 3px solid var(--cc-blue);
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  .county-panel-name {
+    font-family: 'Poppins', sans-serif;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--cc-blue);
+    line-height: 1.2;
+  }
+  .county-panel-sub {
+    font-size: 0.68rem;
+    color: var(--muted);
+    margin-top: 3px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .county-panel-close {
+    background: none;
+    border: none;
+    font-size: 0.9rem;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    flex-shrink: 0;
+    transition: all 0.1s;
+  }
+  .county-panel-close:hover { background: #f0f4f8; color: var(--text); }
+
+  .county-panel-count {
+    padding: 10px 16px 8px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .county-client-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 6px 0;
+  }
+
+  .county-client-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 16px;
+    border-bottom: 1px solid #f4f7fb;
+    transition: background 0.1s;
+  }
+  .county-client-row:last-child { border-bottom: none; }
+  .county-client-row:hover { background: rgba(0,115,255,0.04); }
+
+  .client-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    color: white;
+    font-size: 0.65rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-family: 'Poppins', sans-serif;
+    margin-top: 2px;
+  }
+
+  .client-details { flex: 1; min-width: 0; }
+
+  .client-name {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text);
+    line-height: 1.3;
+    margin-bottom: 3px;
+  }
+
+  .client-field {
+    font-size: 0.68rem;
+    color: var(--muted);
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .client-field-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .client-field-icon { flex-shrink: 0; font-size: 0.65rem; margin-top: 1px; }
+
+  .client-field-label {
+    flex-shrink: 0;
+    color: var(--muted);
+    font-size: 0.64rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .client-field-value {
+    color: var(--text);
+    font-size: 0.68rem;
+    word-break: break-word;
+  }
+
+  .client-tracker-link {
+    color: var(--cc-blue);
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 0.68rem;
+  }
+  .client-tracker-link:hover { text-decoration: underline; }
+
+  .client-tracker {
+    color: var(--cc-blue);
+    font-weight: 600;
+    font-size: 0.68rem;
+  }
+
+  .client-email {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .county-no-data {
+    padding: 28px 16px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.75rem;
+    line-height: 1.8;
+  }
+
+  .county-highlighted { stroke: var(--cc-blue) !important; stroke-width: 2 !important; opacity: 1 !important; }
+
+  /* Org location markers */
+  .org-marker-tc   { fill: #0073FF; stroke: white; stroke-width: 1.5; cursor: pointer; pointer-events: all; }
+  .org-marker-fo   { fill: #FECB00; stroke: #c9a000; stroke-width: 1.5; cursor: pointer; pointer-events: all; }
+  .org-marker-ch   { fill: white; stroke: #0073FF; stroke-width: 1.5; cursor: pointer; pointer-events: all; }
+  .org-marker-hq   { fill: #0073FF; stroke: white; stroke-width: 2; cursor: pointer; pointer-events: all; }
+  .org-label       { font-family: Poppins,sans-serif; font-size: 7px; font-weight: 700; pointer-events: none; text-anchor: middle; }
+  #route-panel {
+    position: absolute;
+    top: 0;
+    right: -360px;
+    width: 340px;
+    height: 100%;
+    background: white;
+    border-left: 1px solid var(--border);
+    box-shadow: -4px 0 24px rgba(106,13,173,0.12);
+    display: flex;
+    flex-direction: column;
+    z-index: 25;
+    transition: right 0.35s cubic-bezier(0.4,0,0.2,1);
+  }
+  #route-panel.open { right: 0; }
+
+  .route-panel-header {
+    padding: 16px 18px 12px;
+    border-bottom: 3px solid #6a0dad;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+  .route-panel-title { font-size: 1rem; font-weight: 700; color: #6a0dad; font-family:'Poppins',sans-serif; }
+  .route-panel-sub   { font-size: 0.68rem; color: var(--muted); margin-top: 3px; }
+
+  #route-stop-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px 0;
+  }
+
+  .route-stop-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 16px;
+    border-bottom: 1px solid #f0f4f8;
+    transition: background 0.1s;
+    cursor: pointer;
+  }
+  .route-stop-row:hover { background: rgba(106,13,173,0.04); }
+  .route-stop-row:last-child { border-bottom: none; }
+
+  .stop-badge {
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: #6a0dad;
+    color: white;
+    font-size: 0.65rem;
+    font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    font-family: 'Poppins', sans-serif;
+    margin-top: 1px;
+  }
+  .stop-badge.home { background: #0073FF; }
+
+  .stop-details { flex: 1; min-width: 0; }
+  .stop-name    { font-size: 0.8rem; font-weight: 600; color: var(--text); }
+  .stop-meta    { font-size: 0.68rem; color: var(--muted); margin-top: 2px; }
+  .stop-clients { font-size: 0.68rem; font-weight: 600; color: #6a0dad; margin-top: 3px; }
+  .stop-counties {
+    font-size: 0.65rem;
+    color: var(--muted);
+    margin-top: 3px;
+    line-height: 1.5;
+  }
+
+  .route-summary {
+    flex-shrink: 0;
+    padding: 12px 16px;
+    border-top: 2px solid #f0f4f8;
+    background: #faf5ff;
+    font-size: 0.72rem;
+    color: var(--text);
+    line-height: 1.7;
+  }
+  .route-summary strong { color: #6a0dad; }
+
+  /* SVG route elements */
+  .route-line    { stroke: #6a0dad; stroke-width: 2; fill: none; stroke-dasharray: 6 4; opacity: 0.7; }
+  .route-radius  { fill: rgba(106,13,173,0.06); stroke: #6a0dad; stroke-width: 1; stroke-dasharray: 4 3; opacity: 0.5; }
+  .route-marker  { fill: #6a0dad; stroke: white; stroke-width: 2; cursor: pointer; }
+  .route-marker.home-marker { fill: #0073FF; }
+  .route-label   { fill: white; font-size: 9px; font-weight: 700; font-family: Poppins,sans-serif; text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+
+  /* International clients button */
+  .intl-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: #f4f7fb;
+    cursor: pointer;
+    font-family: 'Poppins', sans-serif;
+    font-size: 0.74rem;
+    font-weight: 500;
+    color: var(--text);
+    transition: all 0.15s;
+  }
+  .intl-btn:hover { background: rgba(0,115,255,0.07); border-color: var(--cc-blue); color: var(--cc-blue); }
+  .intl-btn .filter-count { margin-left: auto; }
+
+  /* International clients modal */
+  #intl-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(66,85,99,0.45);
+    z-index: 300;
+    align-items: center;
+    justify-content: center;
+  }
+  #intl-modal.open { display: flex; }
+
+  .intl-modal-box {
+    background: var(--surface);
+    border-radius: 12px;
+    border-top: 4px solid var(--cc-blue);
+    width: 600px;
+    max-width: 95vw;
+    max-height: 82vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 8px 40px rgba(0,115,255,0.15);
+    overflow: hidden;
+  }
+
+  .intl-modal-header {
+    padding: 18px 20px 14px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+
+  .intl-modal-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--cc-blue);
+    font-family: 'Poppins', sans-serif;
+  }
+
+  .intl-modal-sub {
+    font-size: 0.68rem;
+    color: var(--muted);
+    margin-top: 3px;
+  }
+
+  #intl-client-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 0 16px;
+  }
+
+  .intl-client-row {
+    padding: 12px 20px;
+    border-bottom: 1px solid #f0f4f8;
+    transition: background 0.1s;
+  }
+  .intl-client-row:last-child { border-bottom: none; }
+  .intl-client-row:hover { background: rgba(0,115,255,0.03); }
+
+  .intl-client-name {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .intl-country-badge {
+    font-size: 0.62rem;
+    font-weight: 600;
+    background: rgba(0,115,255,0.08);
+    color: var(--cc-blue);
+    border-radius: 4px;
+    padding: 1px 6px;
+  }
+
+  .intl-fields {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 3px 16px;
+  }
+
+  .intl-field {
+    font-size: 0.67rem;
+    color: var(--muted);
+    display: flex;
+    gap: 4px;
+    align-items: baseline;
+  }
+
+  .intl-field-label { font-weight: 600; flex-shrink: 0; }
+  .intl-field-value { color: var(--text); word-break: break-word; }
+
+  .intl-empty {
+    padding: 40px 20px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.8rem;
+    line-height: 1.8;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>
+    <img src="data:image/png;base64,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" height="36" alt="Canine Companions" style="display:block;flex-shrink:0">
+    <span style="display:flex;flex-direction:column;gap:3px;border:none">
+      <span style="font-size:1.25rem;font-weight:700;color:var(--cc-blue);line-height:1.2">Canine Companions</span>
+      <span style="font-size:0.75rem;font-weight:500;color:var(--cc-grey);letter-spacing:0.06em;text-transform:uppercase">Geographic Dashboard</span>
+    </span>
+  </h1>
+  <div class="stats">
+    <span>Total: <strong id="stat-total">0</strong></span>
+    <span>Counties: <strong id="stat-counties">0</strong></span>
+    <span>Region: <strong id="stat-region">All</strong></span>
+  </div>
+</header>
+
+<div class="main">
+  <div class="sidebar">
+
+    <div class="sidebar-top">
+      <div class="sidebar-section">
+        <h3>Import Data</h3>
+        <label class="upload-area">
+          <input type="file" id="csv-upload" accept=".csv">
+          📂 Upload Data CSV
+        </label>
+      </div>
+
+      <div class="filter-tabs">
+        <button class="filter-tab active" data-tab="region" onclick="switchTab('region')">By Region</button>
+        <button class="filter-tab" data-tab="state" onclick="switchTab('state')">By State</button>
+      </div>
+    </div>
+
+    <!-- REGION PANEL -->
+    <div class="filter-panel active" id="panel-region">
+      <div class="region-filter" id="region-filters">
+        <button class="region-btn active" data-region="all" onclick="setRegion('all')">
+          <span class="region-dot" style="background:#aab8c5"></span>
+          All Regions
+          <span class="filter-count" id="count-all">0</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- STATE PANEL -->
+    <div class="filter-panel" id="panel-state">
+      <input class="state-search" id="state-search" type="text" placeholder="Search states…" oninput="filterStateList(this.value)">
+      <div id="state-list"></div>
+    </div>
+
+    <div class="sidebar-bottom">
+      <div class="sidebar-section">
+        <h3 id="context-legend-title">Density Scale</h3>
+        <div id="context-legend">
+          <!-- Populated dynamically -->
+        </div>
+        <!-- Density controls -->
+        <div class="density-controls">
+          <div class="density-row">
+            <label class="density-label">Max value</label>
+            <div class="density-slider-wrap">
+              <input type="range" id="density-max-slider" min="5" max="100" step="5" value="55"
+                oninput="onDensityChange()">
+              <span class="density-val" id="density-max-val">55</span>
+            </div>
+          </div>
+          <div class="density-row">
+            <label class="density-label">Bands</label>
+            <div class="density-slider-wrap">
+              <input type="range" id="density-bands-slider" min="3" max="11" step="1" value="11"
+                oninput="onDensityChange()">
+              <span class="density-val" id="density-bands-val">11</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="sidebar-section">
+        <button class="intl-btn" id="intl-btn" onclick="openIntlPanel()">
+          🌍 International Clients
+          <span class="filter-count" id="intl-count">0</span>
+        </button>
+      </div>
+      <div class="sidebar-section">
+        <button class="intl-btn" id="route-btn" onclick="openRouteOptimizer()" style="border-color:#6a0dad;color:#6a0dad">
+          🗺️ Optimize Routes
+        </button>
+      </div>
+      <div class="sidebar-section">
+        <button class="intl-btn" id="org-toggle-btn" onclick="toggleOrgLocations()" style="border-color:#0073FF;color:#0073FF">
+          📍 Show CC Locations
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="map-container">
+    <div class="active-filters" id="active-filters"></div>
+    <button id="zoom-out-btn" onclick="zoomOut()">⟵ Zoom Out</button>
+
+    <!-- County client drawer -->
+    <div id="county-panel">
+      <div class="county-panel-header">
+        <div>
+          <div class="county-panel-name" id="cp-name"></div>
+          <div class="county-panel-sub" id="cp-sub"></div>
+        </div>
+        <button class="county-panel-close" onclick="closeCountyAndZoom()">✕</button>
+      </div>
+      <div class="county-panel-count" id="cp-count"></div>
+      <div class="county-client-list" id="cp-client-list"></div>
+    </div>
+
+    <div id="loading">
+      <div class="spinner"></div>
+      Loading US county map…
+    </div>
+    <svg id="map-svg" viewBox="0 0 960 600"></svg>
+
+    <!-- Org locations overlay — drawn on top of everything -->
+    <svg id="org-svg" viewBox="0 0 960 600" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;display:none"></svg>
+
+    <!-- Org location popup -->
+    <div id="org-popup" style="display:none;position:absolute;background:white;border:1px solid var(--border);border-top:3px solid var(--cc-blue);border-radius:8px;padding:10px 14px;font-family:Poppins,sans-serif;font-size:0.72rem;max-width:240px;box-shadow:0 4px 20px rgba(0,115,255,0.15);z-index:30;pointer-events:none">
+      <div id="org-popup-name" style="font-weight:700;color:var(--cc-blue);margin-bottom:3px"></div>
+      <div id="org-popup-type" style="font-size:0.62rem;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:5px"></div>
+      <div id="org-popup-region" style="font-size:0.68rem;color:var(--muted);margin-bottom:3px"></div>
+      <div id="org-popup-areas" style="font-size:0.68rem;color:var(--text);margin-bottom:3px"></div>
+      <div id="org-popup-address" style="font-size:0.65rem;color:var(--muted)"></div>
+    </div>
+
+    <!-- Org locations legend -->
+    <div id="org-legend" style="display:none;position:absolute;bottom:16px;left:16px;background:white;border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-family:Poppins,sans-serif;font-size:0.68rem;box-shadow:0 2px 8px rgba(0,0,0,0.1);z-index:10;pointer-events:none">
+      <div style="font-weight:700;color:var(--cc-blue);margin-bottom:7px;font-size:0.72rem">CC Locations</div>
+      <div style="display:flex;align-items:center;gap:7px;margin-bottom:5px">
+        <svg width="14" height="14"><rect x="1" y="1" width="12" height="12" transform="rotate(45 7 7)" fill="#0073FF" stroke="white" stroke-width="1.5"/></svg>
+        Training Center
+      </div>
+      <div style="display:flex;align-items:center;gap:7px;margin-bottom:5px">
+        <svg width="14" height="14"><rect x="2" y="2" width="10" height="10" rx="2" fill="#0073FF" stroke="white" stroke-width="1.5"/></svg>
+        Field Office
+      </div>
+      <div style="display:flex;align-items:center;gap:7px">
+        <svg width="14" height="14"><circle cx="7" cy="7" r="5" fill="#FECB00" stroke="#c9a000" stroke-width="1.5"/></svg>
+        Volunteer Chapter
+      </div>
+    </div>
+    <svg id="route-svg" viewBox="0 0 960 600" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;display:none"></svg>
+
+    <!-- Route results panel -->
+    <div id="route-panel">
+      <div class="route-panel-header">
+        <div>
+          <div class="route-panel-title">🗺️ NW Route Optimizer</div>
+          <div class="route-panel-sub" id="route-panel-sub">Optimized from Santa Rosa, CA</div>
+        </div>
+        <button class="county-panel-close" onclick="closeRoutePanel()" style="font-size:1rem">✕</button>
+      </div>
+      <div id="route-stop-list"></div>
+      <div class="route-summary" id="route-summary"></div>
+    </div>
+    <div id="tooltip">
+      <div class="tt-county" id="tt-county"></div>
+      <div class="tt-state" id="tt-state"></div>
+      <div class="tt-clients" id="tt-clients"></div>
+      <div class="tt-region" id="tt-region"></div>
+    </div>
+  </div>
+</div>
+
+<div class="infobar">
+  <span>CSV COLUMNS DETECTED:</span>
+  <div class="field-map" id="field-map-display">
+    <span class="field-chip">Upload a CSV to begin</span>
+  </div>
+</div>
+
+<!-- Column Mapping Modal -->
+<div id="col-modal">
+  <div class="modal-box">
+    <h2>Map Your CSV Columns</h2>
+    <p>Just tell us the four key columns below — <strong>all other columns</strong> will be stored automatically and shown in each client's detail card.</p>
+
+    <div class="map-row">
+      <label>County *</label>
+      <select id="map-county"><option value="">— select —</option></select>
+    </div>
+    <div class="map-row">
+      <label>State *</label>
+      <select id="map-state"><option value="">— select —</option></select>
+    </div>
+    <div class="map-row">
+      <label>First Name</label>
+      <select id="map-first"><option value="">— skip —</option></select>
+    </div>
+    <div class="map-row">
+      <label>Last Name</label>
+      <select id="map-last"><option value="">— skip —</option></select>
+    </div>
+    <div class="map-row">
+      <label>Client ID / Tracker #</label>
+      <select id="map-tracker"><option value="">— skip —</option></select>
+    </div>
+    <div class="map-row">
+      <label>Region</label>
+      <select id="map-region"><option value="">— auto-assign —</option></select>
+    </div>
+
+    <div class="region-map-section">
+      <h4>Name Your 6 Regions</h4>
+      <div id="region-name-inputs"></div>
+    </div>
+
+    <div class="error-msg" id="modal-error">Please select at least County and State columns.</div>
+
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmMapping()">Build Map →</button>
+    </div>
+  </div>
+</div>
+
+<!-- International Clients Modal -->
+<div id="intl-modal">
+  <div class="intl-modal-box">
+    <div class="intl-modal-header">
+      <div>
+        <div class="intl-modal-title">🌍 International Clients</div>
+        <div class="intl-modal-sub" id="intl-modal-sub">Clients located outside the United States</div>
+      </div>
+      <button class="county-panel-close" onclick="closeIntlPanel()" style="font-size:1rem">✕</button>
+    </div>
+    <input type="text" class="state-search" id="intl-search" placeholder="Search by name, country, city…" oninput="filterIntlList(this.value)" style="margin:12px 16px 4px;width:calc(100% - 32px)">
+    <div id="intl-client-list"></div>
+  </div>
+</div>
+
+<!-- Route Region Picker Modal -->
+<div id="route-region-modal" style="display:none;position:fixed;inset:0;background:rgba(66,85,99,0.5);z-index:300;align-items:center;justify-content:center">
+  <div style="background:white;border-radius:12px;border-top:4px solid #6a0dad;padding:28px 32px;width:380px;max-width:95vw;box-shadow:0 8px 40px rgba(106,13,173,0.15)">
+    <div style="font-family:Poppins,sans-serif;font-size:1rem;font-weight:700;color:#6a0dad;margin-bottom:6px">🗺️ Optimize Routes</div>
+    <div style="font-size:0.72rem;color:var(--muted);margin-bottom:20px">Select a region to generate an optimized visit schedule. Routes start from each region's training center.</div>
+    <div style="display:flex;flex-direction:column;gap:8px" id="route-region-buttons"></div>
+    <div style="margin-top:18px;text-align:right">
+      <button onclick="document.getElementById('route-region-modal').style.display='none'" style="background:none;border:none;font-family:Poppins,sans-serif;font-size:0.74rem;color:var(--muted);cursor:pointer;padding:4px 8px">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── REGION CONFIG ────────────────────────────────────────────────
+// Canine Companions brand colors: #0073FF (blue), #FECB00 (yellow), #425563 (grey)
+// 6 region colors derived from CC brand palette
+const REGION_COLORS = [
+  '#0073FF',  // Northeast     — CC primary blue
+  '#00b4d8',  // North Central — cyan/teal (clearly different from blue)
+  '#FECB00',  // Southeast     — CC yellow
+  '#e05c00',  // South Central — burnt orange (clearly different from yellow)
+  '#425563',  // Southwest     — CC slate grey
+  '#6a0dad',  // Northwest     — purple (clearly different from all others)
+];
+// 0=Northeast, 1=North Central, 2=Southeast, 3=South Central, 4=Southwest, 5=Northwest
+let regionNames = ['Northeast','North Central','Southeast','South Central','Southwest','Northwest'];
+
+// Canine Companions official 6-region mapping (canine.org)
+// Note: CA and NV are split between Southwest (south) and Northwest (north) — mapped to Northwest
+// as the majority of those states' area falls in that territory; user can override via CSV region column
+const STATE_REGION_DEFAULT = {
+  // Northeast: NY, NJ, CT, DE, PA, MD, DC, VA, WV, MA, RI, VT, NH, ME
+  'ME':0,'NH':0,'VT':0,'MA':0,'RI':0,'CT':0,'NY':0,'NJ':0,'PA':0,
+  'DE':0,'MD':0,'DC':0,'VA':0,'WV':0,
+  // North Central: OH, KY, MI, IN, IL, WI, MO, IA, MN, KS, NE, ND, SD
+  'OH':1,'KY':1,'MI':1,'IN':1,'IL':1,'WI':1,'MO':1,'IA':1,'MN':1,'KS':1,'NE':1,'ND':1,'SD':1,
+  // Southeast: FL, GA, TN, NC, SC, MS, AL
+  'FL':2,'GA':2,'TN':2,'NC':2,'SC':2,'MS':2,'AL':2,
+  // South Central: TX, AR, LA, OK
+  'TX':3,'AR':3,'LA':3,'OK':3,
+  // Southwest: AZ, UT, CO, NM, HI (+ Southern CA/NV — statewide defaulted here)
+  'AZ':4,'UT':4,'CO':4,'NM':4,'HI':4,
+  // Northwest: WA, OR, CA, ID, MT, WY, AK, NV
+  'WA':5,'OR':5,'CA':5,'ID':5,'MT':5,'WY':5,'AK':5,'NV':5
+};
+
+// ─── STATE ────────────────────────────────────────────────────────
+let clientData = {}; // { "county_state": { count, region, clients[] } }
+let activeRegion = 'all';  // 'all' or index string '0'-'5'
+let activeState  = 'all';  // 'all' or state abbr e.g. 'CA'
+let csvHeaders = [];
+let csvRows = [];
+let countyPaths = {}; // fips → SVGElement
+let mapLoaded = false;
+let allCountyFeatures = [];
+let allStateFeatures  = [];
+let geoPathFn = null;
+let activeCounty = null; // { fips, name, state } when a county is selected
+let sfBaseUrl    = 'https://canine.lightning.force.com';
+
+// ─── MAP LOADING ──────────────────────────────────────────────────
+async function loadMap() {
+  const loadingEl = document.getElementById('loading');
+  try {
+    const sources = [
+      'https://cdn.jsdelivr.net/npm/us-atlas@3/counties-albers-10m.json',
+      'https://unpkg.com/us-atlas@3/counties-albers-10m.json',
+    ];
+    let topo = null, lastErr = null;
+    for (const url of sources) {
+      try {
+        const r = await fetch(url);
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        topo = await r.json();
+        break;
+      } catch(e) { lastErr = e; }
+    }
+    if (!topo) throw lastErr;
+    renderMap(topo);
+    loadingEl.style.display = 'none';
+    mapLoaded = true;
+  } catch(e) {
+    loadingEl.innerHTML = `
+      <div style="text-align:center;padding:20px;max-width:360px">
+        <div style="font-size:2rem;margin-bottom:12px">🗺️</div>
+        <div style="color:#1a2a3a;font-weight:600;margin-bottom:8px">Map data could not be loaded</div>
+        <div style="color:#6b7e8f;font-size:0.78rem;line-height:1.6;margin-bottom:16px">
+          This map requires an internet connection to load US county boundaries.<br>
+          Open this file directly in Chrome, Edge, or Firefox while online.
+        </div>
+        <button onclick="loadMap()" style="background:#0073FF;color:#fff;border:none;border-radius:7px;padding:9px 20px;font-family:Poppins,sans-serif;font-size:0.78rem;font-weight:600;cursor:pointer">↻ Retry</button>
+        <div style="color:#aab8c5;font-size:0.65rem;margin-top:10px">${e?.message || 'Network error'}</div>
+      </div>`;
+  }
+}
+
+function renderMap(topo) {
+  const svg = document.getElementById('map-svg');
+  const counties = topojson.feature(topo, topo.objects.counties);
+  const states   = topojson.feature(topo, topo.objects.states);
+
+  geoPathFn = d3.geoPath();
+  allCountyFeatures = counties.features;
+  allStateFeatures  = states.features;
+
+  const countyGroup = document.createElementNS('http://www.w3.org/2000/svg','g');
+  counties.features.forEach(f => {
+    const el = document.createElementNS('http://www.w3.org/2000/svg','path');
+    el.setAttribute('d', geoPathFn(f));
+    el.setAttribute('class','county-path');
+    el.dataset.fips = f.id;
+    el.dataset.name = f.properties.name;
+    countyPaths[f.id] = el;
+
+    const regionIdx = getRegionByFips(f.id);
+    el.setAttribute('fill', '#ffffff');
+    el.setAttribute('stroke', REGION_COLORS[regionIdx]);
+    el.setAttribute('stroke-width', '0.6');
+
+    el.addEventListener('mousemove', e => showTooltip(e, f));
+    el.addEventListener('mouseleave', hideTooltip);
+    el.addEventListener('click', () => selectCounty(f));
+    countyGroup.appendChild(el);
+  });
+
+  const stateGroup = document.createElementNS('http://www.w3.org/2000/svg','g');
+  states.features.forEach(f => {
+    const el = document.createElementNS('http://www.w3.org/2000/svg','path');
+    el.setAttribute('d', geoPathFn(f));
+    el.setAttribute('class','state-path');
+    stateGroup.appendChild(el);
+  });
+
+  // Region boundary layer — one thick colored path per region edge
+  // Uses topojson.mesh with a filter: only segments where the two
+  // neighboring counties belong to DIFFERENT regions (outer region border)
+  const regionBoundaryGroup = document.createElementNS('http://www.w3.org/2000/svg','g');
+  REGION_COLORS.forEach((color, rIdx) => {
+    // mesh filter: keep arcs that are either on the exterior (b===a, i.e. border of US)
+    // OR separate two counties where exactly one side is this region
+    const mesh = topojson.mesh(topo, topo.objects.counties, (a, b) => {
+      const ra = getRegionByFips(a.id);
+      const rb = getRegionByFips(b.id);
+      // Keep this arc if it borders region rIdx from either side, and the other side is a different region
+      return (ra === rIdx || rb === rIdx) && ra !== rb;
+    });
+    const d = geoPathFn(mesh);
+    if (!d || d === 'M' || d.length < 4) return; // skip empty
+    const el = document.createElementNS('http://www.w3.org/2000/svg','path');
+    el.setAttribute('d', d);
+    el.setAttribute('class','region-boundary');
+    el.setAttribute('stroke', '#0073FF');
+    el.setAttribute('stroke-width', '2');
+    regionBoundaryGroup.appendChild(el);
+  });
+
+  svg.appendChild(countyGroup);
+  svg.appendChild(stateGroup);
+  svg.appendChild(regionBoundaryGroup);
+
+  // Build the county name → FIPS lookup now that all paths are registered
+  buildReverseLookup();
+  // Initialize the Albers projection for org location markers
+  initOrgProjection();
+}
+
+// ─── ZOOM ─────────────────────────────────────────────────────────
+const BASE_VIEWBOX = { x: 0, y: 0, w: 960, h: 600 };
+let currentViewBox = { ...BASE_VIEWBOX };
+let zoomAnimFrame = null;
+
+function zoomToSelection() {
+  if (!geoPathFn || !allCountyFeatures.length) return;
+
+  // Collect the features that match the current filter
+  let features = [];
+  if (activeState !== 'all') {
+    // Zoom to counties within that state
+    features = allCountyFeatures.filter(f => fipsToState(f.id) === activeState);
+  } else if (activeRegion !== 'all') {
+    // Zoom to all counties in the region
+    features = allCountyFeatures.filter(f => getRegionByFips(f.id) === +activeRegion);
+  } else {
+    zoomToViewBox(BASE_VIEWBOX);
+    return;
+  }
+
+  if (!features.length) return;
+
+  // Compute union bounding box of all selected features
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  features.forEach(f => {
+    const b = geoPathFn.bounds(f);
+    if (b[0][0] < minX) minX = b[0][0];
+    if (b[0][1] < minY) minY = b[0][1];
+    if (b[1][0] > maxX) maxX = b[1][0];
+    if (b[1][1] > maxY) maxY = b[1][1];
+  });
+
+  // Add padding
+  const pad = activeState !== 'all' ? 30 : 20;
+  minX -= pad; minY -= pad; maxX += pad; maxY += pad;
+
+  // Clamp to map bounds
+  minX = Math.max(0, minX);
+  minY = Math.max(0, minY);
+  maxX = Math.min(960, maxX);
+  maxY = Math.min(600, maxY);
+
+  zoomToViewBox({ x: minX, y: minY, w: maxX - minX, h: maxY - minY });
+  document.getElementById('zoom-out-btn').classList.add('visible');
+}
+
+function zoomToViewBox(target) {
+  if (zoomAnimFrame) cancelAnimationFrame(zoomAnimFrame);
+  const svg = document.getElementById('map-svg');
+  const start = { ...currentViewBox };
+  const duration = 520; // ms
+  const startTime = performance.now();
+
+  function easeInOut(t) {
+    return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+  }
+
+  function step(now) {
+    const elapsed = now - startTime;
+    const t = Math.min(elapsed / duration, 1);
+    const e = easeInOut(t);
+
+    currentViewBox = {
+      x: start.x + (target.x - start.x) * e,
+      y: start.y + (target.y - start.y) * e,
+      w: start.w + (target.w - start.w) * e,
+      h: start.h + (target.h - start.h) * e,
+    };
+
+    svg.setAttribute('viewBox', `${currentViewBox.x} ${currentViewBox.y} ${currentViewBox.w} ${currentViewBox.h}`);
+    syncRouteViewBox();
+
+    if (t < 1) {
+      zoomAnimFrame = requestAnimationFrame(step);
+    } else {
+      zoomAnimFrame = null;
+    }
+  }
+
+  zoomAnimFrame = requestAnimationFrame(step);
+}
+
+// ─── COUNTY SELECTION ─────────────────────────────────────────────
+function selectCounty(feature) {
+  const fips  = feature.id;
+  const name  = feature.properties.name;
+  const state = fipsToState(fips);
+
+  // Toggle off if clicking same county
+  if (activeCounty && activeCounty.fips === fips) {
+    closeCountyAndZoom();
+    return;
+  }
+
+  // Clear previous highlight
+  if (activeCounty) {
+    const prev = countyPaths[activeCounty.fips];
+    if (prev) prev.classList.remove('county-highlighted');
+  }
+
+  activeCounty = { fips, name, state };
+
+  const el = countyPaths[fips];
+  if (el) el.classList.add('county-highlighted');
+
+  zoomToCounty(feature);
+  openCountyPanel(name, state, fips);
+}
+
+function zoomToCounty(feature) {
+  if (!geoPathFn) return;
+  const b   = geoPathFn.bounds(feature);
+  const pad = 40;
+  let minX = Math.max(0,   b[0][0] - pad);
+  let minY = Math.max(0,   b[0][1] - pad);
+  let maxX = Math.min(960, b[1][0] + pad);
+  let maxY = Math.min(600, b[1][1] + pad);
+
+  // Minimum visible area for tiny counties
+  const minSize = 80;
+  if (maxX - minX < minSize) { const cx=(minX+maxX)/2; minX=cx-minSize/2; maxX=cx+minSize/2; }
+  if (maxY - minY < minSize) { const cy=(minY+maxY)/2; minY=cy-minSize/2; maxY=cy+minSize/2; }
+
+  zoomToViewBox({ x: minX, y: minY, w: maxX - minX, h: maxY - minY });
+  document.getElementById('zoom-out-btn').classList.add('visible');
+}
+
+function openCountyPanel(countyName, stateAbbr, fips) {
+  const panel     = document.getElementById('county-panel');
+  const rIdx      = getRegionByFips(fips);
+  const color     = REGION_COLORS[rIdx];
+  const stateName = (ALL_STATES.find(s => s.abbr === stateAbbr) || {}).name || stateAbbr;
+
+  document.getElementById('cp-name').textContent = countyName + ' County';
+  document.getElementById('cp-sub').innerHTML =
+    `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};margin-right:4px"></span>${stateName} · ${regionNames[rIdx]}`;
+
+  const key   = makeKey(countyName, stateAbbr);
+  const info  = clientData[key];
+  // Respect active region filter — if this county belongs to a different region, treat as no data
+  const regionMismatch = activeRegion !== 'all' && info && info.regionIdx !== +activeRegion;
+  const listEl  = document.getElementById('cp-client-list');
+  const countEl = document.getElementById('cp-count');
+  listEl.innerHTML = '';
+
+  if (!info || info.count === 0 || regionMismatch) {
+    countEl.textContent = 'No clients on record';
+    listEl.innerHTML = `
+      <div class="county-no-data">
+        <div style="font-size:1.8rem;margin-bottom:8px">📭</div>
+        No clients mapped to this county yet.<br>
+        Upload your Salesforce CSV to populate client data.
+      </div>`;
+  } else {
+    countEl.textContent = `${info.count} client${info.count !== 1 ? 's' : ''} in this county`;
+
+    info.clients.forEach(client => {
+      const f       = client.fields || {};
+      const firstName = f['First Name'] || '';
+      const lastName  = f['Last Name']  || '';
+      const fullName  = client.name || [firstName, lastName].filter(Boolean).join(' ') || '(No name)';
+      const tracker   = client.tracker || '';
+      const initials  = fullName.trim().split(/\s+/).map(w => w[0]).slice(0,2).join('').toUpperCase() || '?';
+      const sfLink    = tracker && sfBaseUrl ? `${sfBaseUrl}/lightning/r/Account/${tracker}/view` : '';
+
+      let fieldsHtml = '';
+      DISPLAY_FIELDS.forEach(({ header, label, icon }) => {
+        const val = f[header];
+        if (!val) return;
+        const displayLabel = label || header;
+        fieldsHtml += `
+          <div class="client-field client-field-row">
+            <span class="client-field-icon">${icon}</span>
+            <span class="client-field-label">${displayLabel}:</span>
+            <span class="client-field-value">${header === 'Email'
+              ? `<a href="mailto:${val}" style="color:var(--cc-blue);text-decoration:none">${val}</a>`
+              : header === 'Phone'
+              ? `<a href="tel:${val}" style="color:var(--cc-blue);text-decoration:none">${val}</a>`
+              : val}</span>
+          </div>`;
+      });
+
+      const row = document.createElement('div');
+      row.className = 'county-client-row';
+      row.innerHTML = `
+        <div class="client-avatar" style="background:${color}">${initials}</div>
+        <div class="client-details">
+          <div class="client-name">${fullName}</div>
+          ${tracker ? `<div class="client-field">${sfLink
+            ? `<a href="${sfLink}" target="_blank" class="client-tracker-link">🔗 ID: ${tracker} ↗</a>`
+            : `<span class="client-tracker">ID: ${tracker}</span>`
+          }</div>` : ''}
+          ${fieldsHtml}
+        </div>`;
+      listEl.appendChild(row);
+    });
+  }
+
+  panel.classList.add('open');
+}
+
+function closeCountyPanel() {
+  document.getElementById('county-panel').classList.remove('open');
+  if (activeCounty) {
+    const el = countyPaths[activeCounty.fips];
+    if (el) el.classList.remove('county-highlighted');
+  }
+  activeCounty = null;
+}
+
+function closeCountyAndZoom() {
+  closeCountyPanel();
+  // Zoom back to state or region level, or full map
+  if (activeState !== 'all' || activeRegion !== 'all') {
+    zoomToSelection();
+  } else {
+    zoomToViewBox(BASE_VIEWBOX);
+    document.getElementById('zoom-out-btn').classList.remove('visible');
+  }
+}
+
+function zoomOut() {
+  closeCountyPanel();
+  // Reset all filters and zoom to full US
+  activeRegion = 'all';
+  activeState  = 'all';
+  updateRegionFilters();
+  updateStateList();
+  updateActiveChips();
+  updateStats();
+  updateContextLegend();
+  colorMap();
+  document.getElementById('stat-region').textContent = 'All';
+  zoomToViewBox(BASE_VIEWBOX);
+  document.getElementById('zoom-out-btn').classList.remove('visible');
+}
+
+function showTooltip(e, feature) {
+  const tt = document.getElementById('tooltip');
+  const fips = feature.id;
+  const name = feature.properties.name;
+  const stateAbbr = fipsToState(fips);
+
+  const key = makeKey(name, stateAbbr);
+  const info = clientData[key];
+
+  // Always show region based on FIPS (works even before CSV upload)
+  const fipsRegion = getRegionByFips(fips);
+  const regionLabel = regionNames[fipsRegion];
+
+  document.getElementById('tt-county').textContent = name + ' County';
+  document.getElementById('tt-state').textContent = stateAbbr || '';
+
+  if (info && info.count > 0) {
+    document.getElementById('tt-clients').textContent = `${info.count} client${info.count !== 1 ? 's' : ''}`;
+    document.getElementById('tt-region').innerHTML = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${REGION_COLORS[fipsRegion]};margin-right:4px;vertical-align:middle"></span>${regionLabel}`;
+  } else {
+    document.getElementById('tt-clients').textContent = 'No clients';
+    document.getElementById('tt-region').innerHTML = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${REGION_COLORS[fipsRegion]};margin-right:4px;vertical-align:middle"></span>${regionLabel}`;
+  }
+
+  const rect = document.querySelector('.map-container').getBoundingClientRect();
+  let x = e.clientX - rect.left + 14;
+  let y = e.clientY - rect.top - 10;
+  if (x + 200 > rect.width) x -= 210;
+  tt.style.left = x + 'px';
+  tt.style.top  = y + 'px';
+  tt.style.display = 'block';
+}
+
+function hideTooltip() {
+  document.getElementById('tooltip').style.display = 'none';
+}
+
+// ─── CSV HANDLING ─────────────────────────────────────────────────
+document.getElementById('csv-upload').addEventListener('change', function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => parseCSV(ev.target.result);
+  reader.readAsText(file);
+});
+
+function parseCSV(text) {
+  const lines = text.trim().split('\n');
+  csvHeaders = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g,''));
+  csvRows = lines.slice(1).map(line => {
+    // Handle quoted commas
+    const cols = [];
+    let inQ = false, cur = '';
+    for (let c of line) {
+      if (c === '"') { inQ = !inQ; }
+      else if (c === ',' && !inQ) { cols.push(cur.trim()); cur = ''; }
+      else cur += c;
+    }
+    cols.push(cur.trim());
+    return cols;
+  });
+  openModal();
+}
+
+// ─── MODAL ────────────────────────────────────────────────────────
+function openModal() {
+  const modal = document.getElementById('col-modal');
+  const selectors = ['map-county','map-state','map-first','map-last','map-tracker','map-region'];
+  selectors.forEach(id => {
+    const sel = document.getElementById(id);
+    const isRequired = id === 'map-county' || id === 'map-state';
+    sel.innerHTML = isRequired ? '<option value="">— select —</option>' : '<option value="">— skip —</option>';
+    csvHeaders.forEach((h, i) => {
+      const opt = document.createElement('option');
+      opt.value = i;
+      opt.textContent = h;
+      const hl = h.toLowerCase().trim();
+      if (id === 'map-county'  && hl.includes('county')) opt.selected = true;
+      if (id === 'map-state'   && (hl === 'state' || hl === 'billing state' || hl === 'billing state/province' || hl === 'mailing state' || hl === 'mailing state/province')) opt.selected = true;
+      if (id === 'map-first'   && (hl === 'first name' || hl === 'firstname' || hl === 'first')) opt.selected = true;
+      if (id === 'map-last'    && (hl === 'last name'  || hl === 'lastname'  || hl === 'last' || hl === 'surname')) opt.selected = true;
+      if (id === 'map-tracker' && (hl === 'client id' || hl === 'id' || hl === 'cci number' || hl === 'account number' || hl === 'tracker' || hl.includes('client id') || hl.includes('tracker #'))) opt.selected = true;
+      if (id === 'map-region'  && hl.includes('region')) opt.selected = true;
+      sel.appendChild(opt);
+    });
+  });
+
+  // Region name inputs
+  const container = document.getElementById('region-name-inputs');
+  container.innerHTML = '';
+  for (let i = 0; i < 6; i++) {
+    const row = document.createElement('div');
+    row.className = 'region-name-row';
+    row.innerHTML = `<div class="dot" style="background:${REGION_COLORS[i]}"></div>
+      <input type="text" placeholder="Region ${i+1}" value="${regionNames[i]}" data-idx="${i}">`;
+    container.appendChild(row);
+  }
+
+  modal.classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('col-modal').classList.remove('open');
+  document.getElementById('modal-error').style.display = 'none';
+}
+
+function confirmMapping() {
+  const countyIdx  = document.getElementById('map-county').value;
+  const stateIdx   = document.getElementById('map-state').value;
+
+  if (countyIdx === '' || stateIdx === '') {
+    document.getElementById('modal-error').style.display = 'block';
+    return;
+  }
+
+  const firstIdx   = document.getElementById('map-first').value;
+  const lastIdx    = document.getElementById('map-last').value;
+  const trackerIdx = document.getElementById('map-tracker').value;
+  const regionIdx  = document.getElementById('map-region').value;
+
+
+  document.querySelectorAll('#region-name-inputs input').forEach(inp => {
+    regionNames[+inp.dataset.idx] = inp.value || `Region ${+inp.dataset.idx + 1}`;
+  });
+
+  closeModal();
+  processData(
+    +countyIdx,
+    +stateIdx,
+    firstIdx   !== '' ? +firstIdx   : null,
+    lastIdx    !== '' ? +lastIdx    : null,
+    trackerIdx !== '' ? +trackerIdx : null,
+    regionIdx  !== '' ? +regionIdx  : null,
+  );
+}
+
+// ─── DATA PROCESSING ──────────────────────────────────────────────
+// Special column indices tracked globally so openCountyPanel knows which are name/tracker
+let colFirstIdx   = null;
+let colLastIdx    = null;
+let colTrackerIdx = null;
+let colCountyIdx  = null;
+let colStateIdx   = null;
+let intlClients   = []; // clients with non-US state/location
+
+// The 12 ordered display fields for client cards (exact Salesforce header names)
+const DISPLAY_FIELDS = [
+  { header: 'Account Name',                     icon: '🏢' },
+  { header: 'First Name',                       icon: '👤' },
+  { header: 'Last Name',                        icon: '👤' },
+  { header: 'Current Placement: Dog Name',      label: 'Dog Name',             icon: '🐾' },
+  { header: 'Current Placement: Outcome Category', label: 'Outcome Category',    icon: '🏷️' },
+  { header: 'Mailing Street',                   icon: '📍' },
+  { header: 'Mailing City',                     icon: '📍' },
+  { header: 'Mailing State/Province',           icon: '📍' },
+  { header: 'Mailing Zip/Postal Code',          icon: '📍' },
+  { header: 'County',                           icon: '📍' },
+  { header: 'Phone',                            icon: '📞' },
+  { header: 'Email',                            icon: '✉️' },
+];
+
+function processData(countyCol, stateCol, firstCol, lastCol, trackerCol, regionCol) {
+  clientData    = {};
+  intlClients   = [];
+  colFirstIdx   = firstCol;
+  colLastIdx    = lastCol;
+  colTrackerIdx = trackerCol;
+  colCountyIdx  = countyCol;
+  colStateIdx   = stateCol;
+
+  csvRows.forEach(row => {
+    const rawState  = (row[stateCol] || '').trim();
+    const state     = normalizeState(rawState);
+    let county      = (row[countyCol] || '').replace(/\s*county\s*$/i,'').trim();
+
+    const allFields = {};
+    csvHeaders.forEach((h, i) => { allFields[h] = (row[i] || '').trim(); });
+
+    const firstName = firstCol   !== null ? (row[firstCol]   || '').trim() : (allFields['First Name'] || '');
+    const lastName  = lastCol    !== null ? (row[lastCol]    || '').trim() : (allFields['Last Name']  || '');
+    const fullName  = [firstName, lastName].filter(Boolean).join(' ');
+
+    const clientObj = {
+      name:    fullName,
+      tracker: trackerCol !== null ? (row[trackerCol] || '').trim() : '',
+      fields:  allFields,
+    };
+
+    const isUS = state && (STATE_NAME_MAP[rawState.toLowerCase()] !== undefined
+      || Object.values(FIPS_STATE).includes(state));
+
+    if (!isUS && rawState) {
+      intlClients.push(clientObj);
+      return;
+    }
+
+    if (!county || !state) return;
+
+    let regionIdx;
+    if (regionCol !== null && row[regionCol]) {
+      const rv = row[regionCol].trim();
+      const found = regionNames.findIndex(n => n.toLowerCase() === rv.toLowerCase());
+      regionIdx = found >= 0 ? found : getDefaultRegion(state, county);
+    } else {
+      regionIdx = getDefaultRegion(state, county);
+    }
+
+    const key = makeKey(county, state);
+    if (!clientData[key]) {
+      clientData[key] = { count: 0, regionIdx, county, state, clients: [] };
+    }
+    clientData[key].count++;
+    clientData[key].clients.push(clientObj);
+  });
+
+  updateStats();
+  updateRegionFilters();
+  updateStateList();
+  updateActiveChips();
+  updateContextLegend();
+  colorMap();
+  updateFieldDisplay(countyCol, stateCol, firstCol, lastCol, trackerCol);
+  const intlCountEl = document.getElementById('intl-count');
+  if (intlCountEl) intlCountEl.textContent = intlClients.length;
+}
+
+
+// ─── MAP COLORING ─────────────────────────────────────────────────
+function colorMap() {
+  Object.entries(countyPaths).forEach(([fips, el]) => {
+    const regionIdx  = getRegionByFips(fips);
+    const stateAbbr  = fipsToState(fips);
+    const regionMatch = activeRegion === 'all' || regionIdx === +activeRegion;
+    const stateMatch  = activeState  === 'all' || stateAbbr === activeState;
+
+    if (!regionMatch || !stateMatch) {
+      // Dimmed / out of filter
+      el.setAttribute('fill', '#f5f7fa');
+      el.setAttribute('stroke', '#e0e8f0');
+      el.setAttribute('stroke-width', '0.3');
+      el.style.opacity = '0.3';
+    } else {
+      // In-filter: white fill, color-coded region outline
+      el.setAttribute('fill', '#ffffff');
+      el.setAttribute('stroke', REGION_COLORS[regionIdx]);
+      el.setAttribute('stroke-width', '0.6');
+      el.style.opacity = '1';
+    }
+  });
+
+  // Overlay client heat fill on matching counties
+  Object.entries(clientData).forEach(([key, info]) => {
+    const regionMatch = activeRegion === 'all' || info.regionIdx === +activeRegion;
+    const stateMatch  = activeState  === 'all' || info.state === activeState;
+    if (!regionMatch || !stateMatch) return;
+
+    const fips = findFips(info.county, info.state);
+    if (!fips) return;
+    const el = countyPaths[fips];
+    if (!el) return;
+
+    const { fill, stroke } = getShade(REGION_COLORS[info.regionIdx], info.count);
+    el.setAttribute('fill', fill);
+    el.setAttribute('stroke', stroke);
+    el.setAttribute('stroke-width', '0.6');
+    el.style.opacity = '1';
+  });
+}
+
+// ─── DENSITY SCALE (dynamic) ──────────────────────────────────────
+// densityMax  = the count at which the scale maxes out (slider-controlled)
+// densityBands = number of color bands between 0 and max (slider-controlled)
+let densityMax   = 55;
+let densityBands = 11;
+
+// Full color palette — 10 stops from pale blue → CC blue → CC yellow → amber
+// getShade picks evenly-spaced stops based on densityBands
+const DENSITY_PALETTE = [
+  { fill: '#e8f4ff', stroke: '#b8d9f5' },  // lightest blue
+  { fill: '#c0dff7', stroke: '#7ab8f5' },
+  { fill: '#7ab8f5', stroke: '#4a9ae0' },
+  { fill: '#3d9be0', stroke: '#1f7dc4' },
+  { fill: '#0073FF', stroke: '#0055cc' },  // CC primary blue
+  { fill: '#0058cc', stroke: '#003d99' },
+  { fill: '#003d99', stroke: '#002a6b' },  // deep navy
+  { fill: '#FECB00', stroke: '#c9a000' },  // CC yellow
+  { fill: '#f59e0b', stroke: '#c47d08' },  // amber
+  { fill: '#e07b00', stroke: '#b55f00' },  // dark orange (max)
+];
+
+const NO_CLIENT_STOP = { fill: '#ffffff', stroke: '#d0dcea' };
+
+function getShade(hexColor, count) {
+  if (count === 0) return NO_CLIENT_STOP;
+
+  // Clamp count to max — anything at or above max gets the hottest color
+  const clamped = Math.min(count, densityMax);
+
+  // Which palette stop does this count fall into?
+  // Divide the range [1..densityMax] into densityBands equal buckets
+  const bandSize  = densityMax / densityBands;
+  const bandIdx   = Math.min(Math.floor((clamped - 1) / bandSize), densityBands - 1);
+
+  // Map bandIdx (0..densityBands-1) to palette index (0..9)
+  const paletteIdx = Math.round((bandIdx / Math.max(densityBands - 1, 1)) * (DENSITY_PALETTE.length - 1));
+  return DENSITY_PALETTE[paletteIdx];
+}
+
+function onDensityChange() {
+  densityMax   = +document.getElementById('density-max-slider').value;
+  densityBands = +document.getElementById('density-bands-slider').value;
+  document.getElementById('density-max-val').textContent   = densityMax;
+  document.getElementById('density-bands-val').textContent = densityBands;
+  buildDensityLegend();
+  colorMap();
+}
+
+function buildDensityLegend() {
+  const container = document.getElementById('context-legend');
+  if (!container) return;
+
+  // Only show the density scale when no region/state filter is active
+  // (updateContextLegend handles the other cases)
+  if (activeRegion !== 'all' || activeState !== 'all') {
+    updateContextLegend();
+    return;
+  }
+
+  const bandSize = densityMax / densityBands;
+  let html = '<div class="legend-scale">';
+  html += `<div class="legend-row"><div class="legend-swatch" style="background:#ffffff;border:1px solid #d0dcea"></div> No records</div>`;
+
+  for (let i = 0; i < densityBands; i++) {
+    const lo  = Math.round(i * bandSize) + 1;
+    const hi  = Math.round((i + 1) * bandSize);
+    const pIdx = Math.round((i / Math.max(densityBands - 1, 1)) * (DENSITY_PALETTE.length - 1));
+    const { fill } = DENSITY_PALETTE[pIdx];
+    const label = i === densityBands - 1
+      ? `${lo}+`
+      : `${lo}–${hi}`;
+    html += `<div class="legend-row"><div class="legend-swatch" style="background:${fill}"></div> ${label}</div>`;
+  }
+
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+// ─── TAB SWITCHING ────────────────────────────────────────────────
+function switchTab(tab) {
+  document.querySelectorAll('.filter-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+  document.querySelectorAll('.filter-panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + tab));
+}
+
+// ─── REGION FILTERS ───────────────────────────────────────────────
+function updateRegionFilters() {
+  const container = document.getElementById('region-filters');
+  container.innerHTML = '';
+
+  const totalClients = Object.values(clientData).reduce((s,v) => s + v.count, 0);
+  const allBtn = document.createElement('button');
+  allBtn.className = 'region-btn' + (activeRegion === 'all' ? ' active' : '');
+  allBtn.dataset.region = 'all';
+  allBtn.innerHTML = `<span class="region-dot" style="background:#aab8c5"></span>All Regions<span class="filter-count">${totalClients}</span>`;
+  allBtn.onclick = () => setRegion('all');
+  container.appendChild(allBtn);
+
+  for (let i = 0; i < 6; i++) {
+    const count = Object.values(clientData).filter(d => d.regionIdx === i).reduce((s,v) => s+v.count, 0);
+    const btn = document.createElement('button');
+    const color = REGION_COLORS[i];
+    const isActive = activeRegion === String(i);
+    btn.className = 'region-btn' + (isActive ? ' active' : '');
+    if (isActive) {
+      btn.style.setProperty('--active-color', color);
+      btn.style.setProperty('--active-bg', hexToRgba(color, 0.1));
+      btn.style.color = color;
+      btn.style.borderColor = color;
+      btn.style.background = hexToRgba(color, 0.1);
+    }
+    btn.dataset.region = i;
+    btn.innerHTML = `<span class="region-dot" style="background:${color}"></span>${regionNames[i]}<span class="filter-count">${count}</span>`;
+    btn.onclick = () => setRegion(String(i));
+    container.appendChild(btn);
+  }
+}
+
+function setRegion(r) {
+  activeRegion = r;
+  activeState = 'all';
+  document.getElementById('stat-region').textContent = r === 'all' ? 'All' : regionNames[+r];
+  updateRegionFilters();
+  updateStateList();
+  updateActiveChips();
+  updateStats();
+  updateContextLegend();
+  colorMap();
+  if (r === 'all') {
+    zoomOut();
+  } else {
+    zoomToSelection();
+  }
+}
+
+// ─── STATE FILTERS ────────────────────────────────────────────────
+// Full US state list with abbreviations
+const ALL_STATES = [
+  {abbr:'AL',name:'Alabama'},{abbr:'AK',name:'Alaska'},{abbr:'AZ',name:'Arizona'},
+  {abbr:'AR',name:'Arkansas'},{abbr:'CA',name:'California'},{abbr:'CO',name:'Colorado'},
+  {abbr:'CT',name:'Connecticut'},{abbr:'DE',name:'Delaware'},{abbr:'FL',name:'Florida'},
+  {abbr:'GA',name:'Georgia'},{abbr:'HI',name:'Hawaii'},{abbr:'ID',name:'Idaho'},
+  {abbr:'IL',name:'Illinois'},{abbr:'IN',name:'Indiana'},{abbr:'IA',name:'Iowa'},
+  {abbr:'KS',name:'Kansas'},{abbr:'KY',name:'Kentucky'},{abbr:'LA',name:'Louisiana'},
+  {abbr:'ME',name:'Maine'},{abbr:'MD',name:'Maryland'},{abbr:'MA',name:'Massachusetts'},
+  {abbr:'MI',name:'Michigan'},{abbr:'MN',name:'Minnesota'},{abbr:'MS',name:'Mississippi'},
+  {abbr:'MO',name:'Missouri'},{abbr:'MT',name:'Montana'},{abbr:'NE',name:'Nebraska'},
+  {abbr:'NV',name:'Nevada'},{abbr:'NH',name:'New Hampshire'},{abbr:'NJ',name:'New Jersey'},
+  {abbr:'NM',name:'New Mexico'},{abbr:'NY',name:'New York'},{abbr:'NC',name:'North Carolina'},
+  {abbr:'ND',name:'North Dakota'},{abbr:'OH',name:'Ohio'},{abbr:'OK',name:'Oklahoma'},
+  {abbr:'OR',name:'Oregon'},{abbr:'PA',name:'Pennsylvania'},{abbr:'RI',name:'Rhode Island'},
+  {abbr:'SC',name:'South Carolina'},{abbr:'SD',name:'South Dakota'},{abbr:'TN',name:'Tennessee'},
+  {abbr:'TX',name:'Texas'},{abbr:'UT',name:'Utah'},{abbr:'VT',name:'Vermont'},
+  {abbr:'VA',name:'Virginia'},{abbr:'WA',name:'Washington'},{abbr:'WV',name:'West Virginia'},
+  {abbr:'WI',name:'Wisconsin'},{abbr:'WY',name:'Wyoming'},{abbr:'DC',name:'Washington DC'}
+];
+
+function getStateRegionIdx(abbr) {
+  return STATE_REGION_DEFAULT[abbr] ?? 0;
+}
+
+function updateStateList(query) {
+  const container = document.getElementById('state-list');
+  container.innerHTML = '';
+  const q = (query || '').toLowerCase();
+
+  // Group states by region
+  const groups = Array.from({length: 6}, () => []);
+  ALL_STATES.forEach(s => {
+    if (q && !s.name.toLowerCase().includes(q) && !s.abbr.toLowerCase().includes(q)) return;
+    const rIdx = getStateRegionIdx(s.abbr);
+    groups[rIdx].push(s);
+  });
+
+  // Only show regions that are visible given activeRegion filter
+  groups.forEach((states, rIdx) => {
+    if (!states.length) return;
+    if (activeRegion !== 'all' && +activeRegion !== rIdx) return;
+
+    const group = document.createElement('div');
+    group.className = 'state-region-group';
+
+    const label = document.createElement('div');
+    label.className = 'state-region-label';
+    label.style.color = REGION_COLORS[rIdx];
+    label.innerHTML = `<span class="dot" style="background:${REGION_COLORS[rIdx]}"></span>${regionNames[rIdx]}`;
+    group.appendChild(label);
+
+    states.forEach(s => {
+      // Count clients in this state
+      const count = Object.values(clientData)
+        .filter(d => d.state === s.abbr)
+        .reduce((sum, d) => sum + d.count, 0);
+
+      const btn = document.createElement('button');
+      const isActive = activeState === s.abbr;
+      btn.className = 'state-btn' + (isActive ? ' active' : '');
+      btn.innerHTML = `<span class="state-abbr">${s.abbr}</span>${s.name}<span class="filter-count">${count > 0 ? count : ''}</span>`;
+      btn.onclick = () => setState(s.abbr, s.name);
+      group.appendChild(btn);
+    });
+
+    container.appendChild(group);
+  });
+}
+
+function filterStateList(q) {
+  updateStateList(q);
+}
+
+function setState(abbr, name) {
+  if (activeState === abbr) {
+    activeState = 'all';
+    // Zoom back to region level if one is still active
+    if (activeRegion !== 'all') {
+      zoomToSelection();
+    } else {
+      zoomOut();
+    }
+  } else {
+    activeState = abbr;
+    const rIdx = getStateRegionIdx(abbr);
+    activeRegion = String(rIdx);
+    zoomToSelection();
+  }
+  document.getElementById('stat-region').textContent =
+    activeState !== 'all' ? name : (activeRegion === 'all' ? 'All' : regionNames[+activeRegion]);
+  updateRegionFilters();
+  updateStateList(document.getElementById('state-search').value);
+  updateActiveChips();
+  updateStats();
+  updateContextLegend();
+  colorMap();
+}
+
+// ─── ACTIVE CHIPS ─────────────────────────────────────────────────
+function updateActiveChips() {
+  const container = document.getElementById('active-filters');
+  container.innerHTML = '';
+  if (activeRegion !== 'all') {
+    const chip = document.createElement('div');
+    chip.className = 'filter-chip';
+    chip.innerHTML = `<span class="chip-dot" style="background:${REGION_COLORS[+activeRegion]}"></span>${regionNames[+activeRegion]}<span class="chip-x">✕</span>`;
+    chip.onclick = () => setRegion('all');
+    container.appendChild(chip);
+  }
+  if (activeState !== 'all') {
+    const s = ALL_STATES.find(s => s.abbr === activeState);
+    const chip = document.createElement('div');
+    chip.className = 'filter-chip';
+    chip.innerHTML = `${s ? s.name : activeState}<span class="chip-x">✕</span>`;
+    chip.onclick = () => setState(activeState, '');
+    container.appendChild(chip);
+  }
+}
+
+// ─── INTERNATIONAL CLIENTS PANEL ─────────────────────────────────
+function openIntlPanel() {
+  document.getElementById('intl-search').value = '';
+  renderIntlClients('');
+  document.getElementById('intl-modal').classList.add('open');
+}
+
+function closeIntlPanel() {
+  document.getElementById('intl-modal').classList.remove('open');
+}
+
+function filterIntlList(q) {
+  renderIntlClients(q);
+}
+
+function renderIntlClients(query) {
+  const container = document.getElementById('intl-client-list');
+  const sub       = document.getElementById('intl-modal-sub');
+  const q         = (query || '').toLowerCase();
+
+  const filtered = intlClients.filter(c => {
+    if (!q) return true;
+    const f = c.fields || {};
+    return Object.values(f).some(v => v.toLowerCase().includes(q))
+      || (c.name || '').toLowerCase().includes(q);
+  });
+
+  sub.textContent = `${filtered.length} client${filtered.length !== 1 ? 's' : ''} outside the United States`;
+
+  if (!filtered.length) {
+    container.innerHTML = `<div class="intl-empty">
+      ${intlClients.length === 0
+        ? '📭 No international clients found in your CSV.'
+        : '🔍 No clients match your search.'}
+    </div>`;
+    return;
+  }
+
+  container.innerHTML = '';
+
+  // Group by country (Mailing State/Province used as country proxy for intl)
+  const byCountry = {};
+  filtered.forEach(c => {
+    const country = c.fields?.['Mailing State/Province'] || c.fields?.['Mailing Country'] || 'Unknown Country';
+    if (!byCountry[country]) byCountry[country] = [];
+    byCountry[country].push(c);
+  });
+
+  Object.entries(byCountry).sort(([a],[b]) => a.localeCompare(b)).forEach(([country, clients]) => {
+    // Country group header
+    const groupHeader = document.createElement('div');
+    groupHeader.style.cssText = 'padding:8px 20px 4px;font-size:0.62rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);background:#f8fafc;border-bottom:1px solid var(--border)';
+    groupHeader.textContent = country;
+    container.appendChild(groupHeader);
+
+    clients.forEach(client => {
+      const f         = client.fields || {};
+      const firstName = f['First Name'] || '';
+      const lastName  = f['Last Name']  || '';
+      const fullName  = client.name || [firstName, lastName].filter(Boolean).join(' ') || '(No name)';
+      const tracker   = client.tracker || '';
+      const sfLink    = tracker && sfBaseUrl ? `${sfBaseUrl}/lightning/r/Account/${tracker}/view` : '';
+
+      let fieldsHtml = '';
+      DISPLAY_FIELDS.forEach(({ header, label, icon }) => {
+        const val = f[header];
+        if (!val) return;
+        const displayLabel = label || header;
+        fieldsHtml += `<div class="intl-field">
+          <span class="intl-field-label">${icon} ${displayLabel}:</span>
+          <span class="intl-field-value">${
+            header === 'Email'
+              ? `<a href="mailto:${val}" style="color:var(--cc-blue);text-decoration:none">${val}</a>`
+              : header === 'Phone'
+              ? `<a href="tel:${val}" style="color:var(--cc-blue);text-decoration:none">${val}</a>`
+              : val
+          }</span>
+        </div>`;
+      });
+
+      const row = document.createElement('div');
+      row.className = 'intl-client-row';
+      row.innerHTML = `
+        <div class="intl-client-name">
+          ${fullName}
+          ${tracker ? `<span class="intl-country-badge">${sfLink
+            ? `<a href="${sfLink}" target="_blank" style="color:inherit;text-decoration:none">ID: ${tracker} ↗</a>`
+            : `ID: ${tracker}`}</span>` : ''}
+        </div>
+        <div class="intl-fields">${fieldsHtml}</div>`;
+      container.appendChild(row);
+    });
+  });
+}
+
+
+function updateContextLegend() {
+  const title = document.getElementById('context-legend-title');
+  const container = document.getElementById('context-legend');
+
+  // Case 1: A state is selected → show counties breakdown
+  if (activeState !== 'all') {
+    const stateName = (ALL_STATES.find(s => s.abbr === activeState) || {}).name || activeState;
+    const rIdx = getStateRegionIdx(activeState);
+    const color = REGION_COLORS[rIdx];
+    title.textContent = `${stateName} — Counties`;
+
+    // Gather counties in this state, restricted to the active region
+    const counties = Object.values(clientData)
+      .filter(d => d.state === activeState && (activeRegion === 'all' || d.regionIdx === +activeRegion))
+      .sort((a,b) => b.count - a.count);
+
+    if (!counties.length) {
+      container.innerHTML = '<div class="ctx-empty">No clients in this state yet.</div>';
+      return;
+    }
+
+    const maxCount = counties[0].count;
+    const list = document.createElement('div');
+    list.className = 'context-list';
+
+    counties.forEach(d => {
+      const row = document.createElement('div');
+      row.className = 'context-row';
+      const pct = maxCount > 0 ? Math.round((d.count / maxCount) * 100) : 0;
+      row.innerHTML = `
+        <div class="ctx-label">${d.county}</div>
+        <div class="ctx-bar-wrap"><div class="ctx-bar" style="width:${pct}%;background:${color}"></div></div>
+        <div class="ctx-count ${d.count === 0 ? 'zero' : ''}">${d.count}</div>`;
+      list.appendChild(row);
+    });
+
+    container.innerHTML = '';
+    container.appendChild(list);
+    return;
+  }
+
+  // Case 2: A region is selected → show states breakdown
+  if (activeRegion !== 'all') {
+    const rIdx = +activeRegion;
+    const color = REGION_COLORS[rIdx];
+    title.textContent = `${regionNames[rIdx]} — States`;
+
+    // All states in this region, sorted by client count desc
+    const regionStates = ALL_STATES
+      .filter(s => getStateRegionIdx(s.abbr) === rIdx)
+      .map(s => {
+        const count = Object.values(clientData)
+          .filter(d => d.state === s.abbr)
+          .reduce((sum, d) => sum + d.count, 0);
+        return { abbr: s.abbr, name: s.name, count };
+      })
+      .sort((a,b) => b.count - a.count);
+
+    if (!regionStates.length) {
+      container.innerHTML = '<div class="ctx-empty">No states in this region.</div>';
+      return;
+    }
+
+    const maxCount = regionStates[0].count || 1;
+    const list = document.createElement('div');
+    list.className = 'context-list';
+
+    regionStates.forEach(s => {
+      const row = document.createElement('div');
+      row.className = 'context-row';
+      const pct = Math.round((s.count / maxCount) * 100);
+      row.innerHTML = `
+        <div class="ctx-label" title="${s.name}"><strong style="color:var(--muted);font-size:0.62rem;margin-right:4px">${s.abbr}</strong>${s.name}</div>
+        <div class="ctx-bar-wrap"><div class="ctx-bar" style="width:${pct}%;background:${color}"></div></div>
+        <div class="ctx-count ${s.count === 0 ? 'zero' : ''}">${s.count || '—'}</div>`;
+      // Clicking a state row in the legend selects that state
+      row.style.cursor = 'pointer';
+      row.onclick = () => { setState(s.abbr, s.name); switchTab('state'); };
+      list.appendChild(row);
+    });
+
+    container.innerHTML = '';
+    container.appendChild(list);
+    return;
+  }
+
+  // Case 3: No filter — show density scale
+  title.textContent = 'Density Scale';
+  buildDensityLegend();
+}
+
+function hexToRgba(hex, alpha) {
+  const r = parseInt(hex.slice(1,3),16);
+  const g = parseInt(hex.slice(3,5),16);
+  const b = parseInt(hex.slice(5,7),16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+// ─── STATS ────────────────────────────────────────────────────────
+function updateStats() {
+  let filtered = Object.values(clientData);
+  if (activeRegion !== 'all') filtered = filtered.filter(d => d.regionIdx === +activeRegion);
+  if (activeState  !== 'all') filtered = filtered.filter(d => d.state === activeState);
+  const total = filtered.reduce((s,v) => s + v.count, 0);
+  const counties = filtered.filter(v => v.count > 0).length;
+  document.getElementById('stat-total').textContent = total;
+  document.getElementById('stat-counties').textContent = counties;
+}
+
+function updateFieldDisplay(cCol, sCol, fCol, lCol, tCol) {
+  const container = document.getElementById('field-map-display');
+  container.innerHTML = '';
+  const fields = [
+    { label: `County → ${csvHeaders[cCol]}`,  mapped: true },
+    { label: `State → ${csvHeaders[sCol]}`,   mapped: true },
+    { label: fCol !== null ? `First Name → ${csvHeaders[fCol]}` : 'First Name → (skipped)', mapped: fCol !== null },
+    { label: lCol !== null ? `Last Name → ${csvHeaders[lCol]}`  : 'Last Name → (skipped)',  mapped: lCol !== null },
+    { label: tCol !== null ? `Client ID → ${csvHeaders[tCol]}`  : 'Client ID → (skipped)',  mapped: tCol !== null },
+    { label: `All other fields (${csvHeaders.length - 2} cols) auto-captured`, mapped: true },
+  ];
+  fields.forEach(f => {
+    const chip = document.createElement('span');
+    chip.className = 'field-chip' + (f.mapped ? ' mapped' : '');
+    chip.textContent = f.label;
+    container.appendChild(chip);
+  });
+}
+
+// ─── HELPERS ──────────────────────────────────────────────────────
+function makeKey(county, state) {
+  return county.toLowerCase().trim() + '|' + state.toUpperCase().trim();
+}
+
+
+// Simplified FIPS → state abbr (from first 2 digits)
+const FIPS_STATE = {"01":"AL","02":"AK","04":"AZ","05":"AR","06":"CA","08":"CO","09":"CT","10":"DE","11":"DC","12":"FL","13":"GA","15":"HI","16":"ID","17":"IL","18":"IN","19":"IA","20":"KS","21":"KY","22":"LA","23":"ME","24":"MD","25":"MA","26":"MI","27":"MN","28":"MS","29":"MO","30":"MT","31":"NE","32":"NV","33":"NH","34":"NJ","35":"NM","36":"NY","37":"NC","38":"ND","39":"OH","40":"OK","41":"OR","42":"PA","44":"RI","45":"SC","46":"SD","47":"TN","48":"TX","49":"UT","50":"VT","51":"VA","53":"WA","54":"WV","55":"WI","56":"WY"};
+
+function fipsToState(fips) {
+  const prefix = String(fips).padStart(5,'0').slice(0,2);
+  return FIPS_STATE[prefix] || '';
+}
+
+// CA and NV are split: Southern CA counties → Southwest (4), rest → Northwest (5)
+const SOUTHERN_CA_FIPS = new Set([
+  '06025','06029','06037','06059','06065','06071','06073','06079','06083','06111'
+]);
+const SOUTHERN_NV_FIPS = new Set(['32003']); // Clark County (Las Vegas)
+
+function getRegionByFips(fipsStr) {
+  const fips = String(fipsStr).padStart(5,'0');
+  const stateFips = fips.slice(0,2);
+  if (stateFips === '06') return SOUTHERN_CA_FIPS.has(fips) ? 4 : 5;
+  if (stateFips === '32') return SOUTHERN_NV_FIPS.has(fips) ? 4 : 5;
+  const stateAbbr = FIPS_STATE[stateFips];
+  if (!stateAbbr) return 0;
+  return STATE_REGION_DEFAULT[stateAbbr] ?? 0;
+}
+
+function getDefaultRegion(stateAbbr, county) {
+  if (stateAbbr === 'CA' || stateAbbr === 'NV') {
+    if (Object.keys(reverseLookup).length === 0) buildReverseLookup();
+    const fips = reverseLookup[makeKey(county || '', stateAbbr)];
+    if (fips) return getRegionByFips(fips);
+    return 5; // default to Northwest
+  }
+  return STATE_REGION_DEFAULT[stateAbbr] ?? 0;
+}
+
+function getBaseRegionColor(regionIdx) {
+  const hex = REGION_COLORS[regionIdx];
+  const r = parseInt(hex.slice(1,3),16);
+  const g = parseInt(hex.slice(3,5),16);
+  const b = parseInt(hex.slice(5,7),16);
+  const bg = [232, 240, 248];
+  const t = 0.13;
+  return `rgb(${Math.round(bg[0]+(r-bg[0])*t)},${Math.round(bg[1]+(g-bg[1])*t)},${Math.round(bg[2]+(b-bg[2])*t)})`;
+}
+
+// Build reverse lookup: countyName|stateAbbr → fips
+let reverseLookup = {};
+function buildReverseLookup() {
+  reverseLookup = {};
+  Object.entries(countyPaths).forEach(([fips, el]) => {
+    const name  = (el.dataset.name || '').trim();
+    const state = fipsToState(fips);
+    reverseLookup[makeKey(name, state)] = fips;
+  });
+}
+
+function findFips(county, state) {
+  if (Object.keys(reverseLookup).length === 0) buildReverseLookup();
+  // Try exact match first
+  const exact = reverseLookup[makeKey(county, state)];
+  if (exact) return exact;
+  // Try stripping trailing "county", "parish", "borough", "census area" etc.
+  const stripped = county.replace(/\s*(county|parish|borough|census area|municipality|city and county)\s*$/i, '').trim();
+  if (stripped !== county) {
+    const fallback = reverseLookup[makeKey(stripped, state)];
+    if (fallback) return fallback;
+  }
+  return null;
+}
+
+// State name → abbr normalization
+const STATE_NAME_MAP = {"alabama":"AL","alaska":"AK","arizona":"AZ","arkansas":"AR","california":"CA","colorado":"CO","connecticut":"CT","delaware":"DE","district of columbia":"DC","florida":"FL","georgia":"GA","hawaii":"HI","idaho":"ID","illinois":"IL","indiana":"IN","iowa":"IA","kansas":"KS","kentucky":"KY","louisiana":"LA","maine":"ME","maryland":"MD","massachusetts":"MA","michigan":"MI","minnesota":"MN","mississippi":"MS","missouri":"MO","montana":"MT","nebraska":"NE","nevada":"NV","new hampshire":"NH","new jersey":"NJ","new mexico":"NM","new york":"NY","north carolina":"NC","north dakota":"ND","ohio":"OH","oklahoma":"OK","oregon":"OR","pennsylvania":"PA","rhode island":"RI","south carolina":"SC","south dakota":"SD","tennessee":"TN","texas":"TX","utah":"UT","vermont":"VT","virginia":"VA","washington":"WA","west virginia":"WV","wisconsin":"WI","wyoming":"WY"};
+
+function normalizeState(s) {
+  if (!s) return '';
+  if (s.length === 2) return s.toUpperCase();
+  return STATE_NAME_MAP[s.toLowerCase()] || s.toUpperCase().slice(0,2);
+}
+
+// ─── CANINE COMPANIONS ORG LOCATIONS ─────────────────────────────
+// Lat/lng sourced from canine.org — projected at render time via D3 geoAlbersUsa
+// so markers land precisely on the map.
+
+const CC_LOCATIONS = [
+  // ─── TRAINING CENTERS ────────────────────────────────────────
+  { type:'tc', name:'Northwest Training Center & HQ',  region:'Northwest',     address:'2965 Dutton Ave, Santa Rosa, CA 95407',           areas:'NorCal, NV (north), OR, WA, ID, MT, WY, AK',   lat:38.4188, lng:-122.7186 },
+  { type:'tc', name:'Southwest Training Center',        region:'Southwest',     address:'124 Rancho del Oro Dr, Oceanside, CA 92057',      areas:'AZ, UT, CO, NM, SoCal, SoNV, HI',              lat:33.1959, lng:-117.3228 },
+  { type:'tc', name:'Northeast Training Center',        region:'Northeast',     address:'286 Middle Island Rd, Medford, NY 11763',         areas:'NY, NJ, CT, DE, PA, MD, DC, VA, WV, MA, RI, VT, NH, ME', lat:40.8204, lng:-72.9968 },
+  { type:'tc', name:'North Central Training Center',        region:'North Central', address:'7480 New Albany-Condit Rd, New Albany, OH 43054', areas:'OH, KY, MI, IN, IL, WI, MO, IA, MN, KS, NE, ND, SD, WPN', lat:40.0909, lng:-82.8068 },
+  { type:'tc', name:'Southeast Training Center',        region:'Southeast',     address:'8150 Clarcona Ocoee Rd, Orlando, FL 32818',       areas:'FL, GA, TN, NC, SC, MS, AL',                    lat:28.5794, lng:-81.4874 },
+  { type:'tc', name:'South Central Training Center',        region:'South Central', address:'7710 Las Colinas Ridge, Irving, TX 75063',        areas:'TX, OK, AR, LA',                                lat:32.8998, lng:-97.0390 },
+
+  // ─── FIELD OFFICES ───────────────────────────────────────────
+  { type:'fo', name:'Puget Sound Field Office',  region:'Northwest',     address:'2454 Occidental Ave S, Seattle, WA 98134',        areas:'Puget Sound area, Washington State',            lat:47.5793, lng:-122.3336 },
+
+  // ─── NORTHWEST CHAPTERS ──────────────────────────────────────
+  { type:'ch', name:'Wine Country Chapter',             region:'Northwest', areas:'Sonoma, Napa, Mendocino, Lake & Marin Counties, CA',         lat:38.4988, lng:-122.7042 },
+  { type:'ch', name:'East Bay Chapter',                 region:'Northwest', areas:'San Francisco East Bay (Alameda & Contra Costa Counties, CA)', lat:37.8716, lng:-122.2727 },
+  { type:'ch', name:'South Bay Chapter',                region:'Northwest', areas:'San Francisco & South Bay (Santa Clara County, CA)',           lat:37.3382, lng:-121.8863 },
+  { type:'ch', name:'Gold Rush Chapter',                region:'Northwest', areas:'Greater Sacramento, CA',                                       lat:38.5816, lng:-121.4944 },
+  { type:'ch', name:'Sierra Foothills Chapter',         region:'Northwest', areas:'Yuba County, CA',                                              lat:39.1388, lng:-121.6175 },
+  { type:'ch', name:'Northern Nevada Comstock Chapter', region:'Northwest', areas:'Northern Nevada (Reno/Sparks area)',                            lat:39.5296, lng:-119.8138 },
+  { type:'ch', name:'Cascade Chapter',                  region:'Northwest', areas:'Northern Oregon and Southern Washington',                       lat:45.5051, lng:-122.6750 },
+  { type:'ch', name:'Puget Sound Chapter',              region:'Northwest', areas:'Northwest Washington (Seattle metro)',                           lat:47.6062, lng:-122.3321 },
+  { type:'ch', name:'Inland Northwest Chapter',         region:'Northwest', areas:'North Idaho, Eastern Washington & Western Montana',             lat:47.6588, lng:-117.4260 },
+  { type:'ch', name:'Treasure Valley Chapter',          region:'Northwest', areas:'Southwest Idaho (Boise metro)',                                  lat:43.6150, lng:-116.2023 },
+  { type:'ch', name:'Big Sky Chapter',                  region:'Northwest', areas:'Northern, Southern & Eastern Montana',                          lat:46.8797, lng:-110.3626 },
+
+  // ─── SOUTHWEST CHAPTERS ──────────────────────────────────────
+  { type:'ch', name:'California Dreamin Chapter',       region:'Southwest', areas:'Orange County & Los Angeles County, CA',                        lat:33.8366, lng:-117.9143 },
+  { type:'ch', name:'Greater Santa Barbara Chapter',    region:'Southwest', areas:'Ventura County, Santa Barbara County & San Luis Obispo County, CA', lat:34.4208, lng:-119.6982 },
+  { type:'ch', name:'Grand Canyon State Chapter',       region:'Southwest', areas:'Arizona (Phoenix metro and statewide)',                          lat:33.4484, lng:-112.0740 },
+  { type:'ch', name:'Rocky Mountain Chapter',           region:'Southwest', areas:'Denver and surrounding areas, CO',                               lat:39.7392, lng:-104.9903 },
+  { type:'ch', name:'Hawaii Chapter',                   region:'Southwest', areas:'Hawaii (statewide)',                                             lat:21.3069, lng:-157.8583 },
+  { type:'ch', name:'Las Vegas Chapter',                region:'Southwest', areas:'Las Vegas metro, Southern Nevada',                               lat:36.1699, lng:-115.1398 },
+
+  // ─── NORTH CENTRAL CHAPTERS ──────────────────────────────────
+  { type:'ch', name:'Greater Chicagoland Chapter', region:'North Central', areas:'Chicago, IL metro area',                                          lat:41.8781, lng:-87.6298 },
+  { type:'ch', name:'Indiana Chapter',             region:'North Central', areas:'Statewide Indiana (hub in Indianapolis)',                          lat:39.7684, lng:-86.1581 },
+  { type:'ch', name:'Great Lakes Chapter',         region:'North Central', areas:'Michigan (statewide)',                                             lat:44.1825, lng:-84.5068 },
+  { type:'ch', name:'Badger State Chapter',        region:'North Central', areas:'Wisconsin (statewide) — founded 2025',                             lat:44.2685, lng:-89.6165 },
+  { type:'ch', name:'Heartland Chapter',           region:'North Central', areas:'Kansas City metro, Kansas & Missouri',                             lat:39.0997, lng:-94.5786 },
+  { type:'ch', name:'Minnesota Chapter',           region:'North Central', areas:'Twin Cities metro and greater Minnesota',                          lat:44.9778, lng:-93.2650 },
+  { type:'ch', name:'Nebraska Chapter',            region:'North Central', areas:'Omaha and statewide Nebraska',                                     lat:41.2565, lng:-95.9345 },
+  { type:'ch', name:'Northern Ohio Chapter',       region:'North Central', areas:'Cleveland, OH and Northern Ohio',                                  lat:41.4993, lng:-81.6944 },
+  { type:'ch', name:'Buckeye Chapter',             region:'North Central', areas:'Columbus, OH and surrounding areas',                               lat:39.9612, lng:-82.9988 },
+  { type:'ch', name:'Cin-Day Chapter',             region:'North Central', areas:'Greater Cincinnati & Dayton, SW Ohio',                             lat:39.1031, lng:-84.5120 },
+  { type:'ch', name:'Western Pennsylvania Chapter',region:'North Central', areas:'Pittsburgh, PA metro area',                                        lat:40.4406, lng:-79.9959 },
+  { type:'ch', name:'Kentucky Chapter',            region:'North Central', areas:'Statewide Kentucky (hub in Louisville); southern Indiana', lat:38.2527, lng:-85.7585 },
+
+  // ─── NORTHEAST CHAPTERS ──────────────────────────────────────
+  { type:'ch', name:'Long Island Chapter',          region:'Northeast', areas:'Long Island, NY',                                                     lat:40.7891, lng:-73.1350 },
+  { type:'ch', name:'NYC Chapter',                  region:'Northeast', areas:'New York City, NY',                                                   lat:40.7128, lng:-74.0060 },
+  { type:'ch', name:'Hudson Valley Chapter',        region:'Northeast', areas:'Hudson Valley, New York',                                             lat:41.7004, lng:-73.9209 },
+  { type:'ch', name:'Upstate New York Chapter',     region:'Northeast', areas:'Albany and the New York Capital District',                            lat:42.6526, lng:-73.7562 },
+  { type:'ch', name:'New Jersey Chapter',           region:'Northeast', areas:'New Jersey (statewide)',                                              lat:40.0583, lng:-74.4057 },
+  { type:'ch', name:'Philadelphia Chapter',         region:'Northeast', areas:'Southeast Pennsylvania and Southern New Jersey',                      lat:39.9526, lng:-75.1652 },
+  { type:'ch', name:'Lehigh Valley Chapter',        region:'Northeast', areas:'Lehigh Valley, Pennsylvania (Allentown/Bethlehem area)',               lat:40.6084, lng:-75.4902 },
+  { type:'ch', name:'Capital Chapter',              region:'Northeast', areas:'Washington D.C., Northern Virginia & West Virginia',                  lat:38.9072, lng:-77.0369 },
+  { type:'ch', name:'Chesapeake Chapter',           region:'Northeast', areas:'Maryland and Delaware',                                               lat:39.0458, lng:-76.6413 },
+  { type:'ch', name:'Old Dominion Chapter',         region:'Northeast', areas:'Richmond, VA area',                                                   lat:37.5407, lng:-77.4360 },
+  { type:'ch', name:'Bay State Chapter',            region:'Northeast', areas:'Massachusetts (statewide)',                                            lat:42.4072, lng:-71.3824 },
+  { type:'ch', name:'Northern New England Chapter', region:'Northeast', areas:'New Hampshire, Maine & Vermont',                                      lat:43.9654, lng:-71.4179 },
+
+  // ─── SOUTHEAST CHAPTERS ──────────────────────────────────────
+  { type:'ch', name:'Central Florida Chapter',    region:'Southeast', areas:'Orlando metro, FL',                                                     lat:28.5383, lng:-81.3792 },
+  { type:'ch', name:'South Florida Chapter',      region:'Southeast', areas:'Miami/Ft. Lauderdale, FL',                                              lat:25.7617, lng:-80.1918 },
+  { type:'ch', name:'Florida First Coast Chapter',region:'Southeast', areas:'Jacksonville, FL area',                                                 lat:30.3322, lng:-81.6557 },
+  { type:'ch', name:'Florida East Coast Chapter', region:'Southeast', areas:'Melbourne/Vero Beach area, FL',                                         lat:28.0836, lng:-80.6081 },
+  { type:'ch', name:'Emerald Coast Chapter',      region:'Southeast', areas:'Pensacola/Ft. Walton Beach, FL (NW Florida panhandle)',                  lat:30.4213, lng:-87.2169 },
+  { type:'ch', name:'Tampa Bay Chapter',          region:'Southeast', areas:'Tampa/St. Petersburg metro, FL',                                        lat:27.9506, lng:-82.4572 },
+  { type:'ch', name:'Southwest Florida Chapter',  region:'Southeast', areas:'Southwest Florida (Naples/Ft. Myers area)',                             lat:26.1420, lng:-81.7948 },
+  { type:'ch', name:'Greater Atlanta Chapter',    region:'Southeast', areas:'Atlanta and surrounding areas, GA',                                     lat:33.7490, lng:-84.3880 },
+  { type:'ch', name:'Nashville Chapter',          region:'Southeast', areas:'Nashville and surrounding areas, TN',                                   lat:36.1627, lng:-86.7816 },
+  { type:'ch', name:'Greater Memphis Chapter',    region:'Southeast', areas:'Memphis and surrounding area, TN',                                      lat:35.1495, lng:-90.0490 },
+  { type:'ch', name:'Charlotte Chapter',          region:'Southeast', areas:'Charlotte and surrounding areas, NC/SC',                                lat:35.2271, lng:-80.8431 },
+  { type:'ch', name:'Coastal Carolina Chapter',   region:'Southeast', areas:'East coast of the Carolina area (Wilmington NC / Myrtle Beach SC)',     lat:34.2257, lng:-77.9447 },
+  { type:'ch', name:'Raleigh Durham Chapter',     region:'Southeast', areas:'Raleigh, Durham and surrounding areas, NC',                             lat:35.7796, lng:-78.6382 },
+
+  // ─── SOUTH CENTRAL CHAPTERS ──────────────────────────────────
+  { type:'ch', name:'DFW Chapter',          region:'South Central', areas:'Dallas/Fort Worth Metro, TX',                                             lat:32.7767, lng:-96.7970 },
+  { type:'ch', name:'Gulf Coast Chapter',   region:'South Central', areas:'Houston and surrounding areas, TX',                                       lat:29.7604, lng:-95.3698 },
+  { type:'ch', name:'Hill Country Chapter', region:'South Central', areas:'I-35 corridor from Waco to San Antonio (Austin, Georgetown, San Antonio, TX)', lat:30.2672, lng:-97.7431 },
+  { type:'ch', name:'Oklahoma Chapter',     region:'South Central', areas:'Oklahoma (statewide, hub in Oklahoma City)',                               lat:35.4676, lng:-97.5164 },
+  { type:'ch', name:'Louisiana Chapter',   region:'South Central', areas:'Louisiana (New Orleans/Baton Rouge area)',                                  lat:29.9511, lng:-90.0715 },
+];
+
+let orgLocationsVisible = false;
+let albersProjection    = null; // initialized once D3 loads
+
+function initOrgProjection() {
+  // geoAlbersUsa default: scale 1070, translate [480,250] — matches us-atlas 960x600 viewBox
+  albersProjection = d3.geoAlbersUsa().scale(1280).translate([480, 300]);
+}
+
+// Map region name → index for coloring for coloring
+const REGION_NAME_TO_IDX = {
+  'Northwest': 5, 'Southwest': 4, 'Northeast': 0,
+  'North Central': 1, 'Southeast': 2, 'South Central': 3,
+};
+
+function toggleOrgLocations() {
+  orgLocationsVisible = !orgLocationsVisible;
+  const btn = document.getElementById('org-toggle-btn');
+  const svg = document.getElementById('org-svg');
+  if (orgLocationsVisible) {
+    btn.textContent = '📍 Hide CC Locations';
+    btn.style.background = 'rgba(0,115,255,0.08)';
+    svg.style.display = '';
+    document.getElementById('org-legend').style.display = '';
+    renderOrgLocations();
+  } else {
+    btn.textContent = '📍 Show CC Locations';
+    btn.style.background = '';
+    svg.style.display = 'none';
+    document.getElementById('org-legend').style.display = 'none';
+    document.getElementById('org-popup').style.display = 'none';
+  }
+}
+
+function renderOrgLocations() {
+  const svg = document.getElementById('org-svg');
+  svg.innerHTML = '';
+  const mapVB = document.getElementById('map-svg').getAttribute('viewBox');
+  svg.setAttribute('viewBox', mapVB);
+
+  if (!albersProjection) initOrgProjection();
+
+  const order = ['ch', 'fo', 'tc'];
+  order.forEach(typeFilter => {
+    CC_LOCATIONS.filter(loc => loc.type === typeFilter).forEach(loc => {
+      // Project lat/lng → SVG coords using D3 geoAlbersUsa
+      const projected = albersProjection([loc.lng, loc.lat]);
+      if (!projected) return; // outside projection bounds (e.g. some AK/HI edge cases handled by D3)
+      const [px, py] = projected;
+
+      const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      g.style.pointerEvents = 'all';
+      const rIdx  = REGION_NAME_TO_IDX[loc.region] ?? 0;
+      const rColor = REGION_COLORS[rIdx];
+
+      if (loc.type === 'tc') {
+        const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        rect.setAttribute('x', px - 6); rect.setAttribute('y', py - 6);
+        rect.setAttribute('width', '12'); rect.setAttribute('height', '12');
+        rect.setAttribute('transform', `rotate(45 ${px} ${py})`);
+        rect.setAttribute('fill', '#0073FF');
+        rect.setAttribute('stroke', 'white'); rect.setAttribute('stroke-width', '1.5');
+        g.appendChild(rect);
+        const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        text.setAttribute('x', px); text.setAttribute('y', py + 1);
+        text.setAttribute('class', 'org-label'); text.setAttribute('fill', '#FECB00'); // CC yellow star
+        text.textContent = '★';
+        g.appendChild(text);
+      } else if (loc.type === 'fo') {
+        const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        rect.setAttribute('x', px - 5); rect.setAttribute('y', py - 5);
+        rect.setAttribute('width', '10'); rect.setAttribute('height', '10');
+        rect.setAttribute('rx', '2');
+        rect.setAttribute('fill', '#0073FF');
+        rect.setAttribute('stroke', 'white'); rect.setAttribute('stroke-width', '1.5');
+        g.appendChild(rect);
+        const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        text.setAttribute('x', px); text.setAttribute('y', py + 1);
+        text.setAttribute('class', 'org-label'); text.setAttribute('fill', '#FECB00');
+        text.textContent = 'F';
+        g.appendChild(text);
+      } else {
+        // Chapter: CC yellow fill, dark gold border — consistent across all regions
+        const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        circle.setAttribute('cx', px); circle.setAttribute('cy', py);
+        circle.setAttribute('r', '4');
+        circle.setAttribute('fill', '#FECB00');
+        circle.setAttribute('stroke', '#c9a000'); circle.setAttribute('stroke-width', '1.5');
+        g.appendChild(circle);
+      }
+
+      g.addEventListener('mouseenter', e => showOrgPopup(e, loc));
+      g.addEventListener('mouseleave', () => {
+        document.getElementById('org-popup').style.display = 'none';
+      });
+      svg.appendChild(g);
+    });
+  });
+}
+
+function showOrgPopup(e, loc) {
+  const popup = document.getElementById('org-popup');
+  const typeLabel = loc.type === 'tc' ? 'Regional Training Center'
+                  : loc.type === 'fo' ? 'Field Office'
+                  : 'Volunteer Chapter';
+  const rIdx = REGION_NAME_TO_IDX[loc.region] ?? 0;
+  const rColor = REGION_COLORS[rIdx];
+
+  document.getElementById('org-popup-name').textContent = loc.name;
+  document.getElementById('org-popup-type').innerHTML =
+    `<span style="color:${loc.type === 'tc' ? '#0073FF' : loc.type === 'fo' ? '#c9a000' : rColor}">${typeLabel}</span>`;
+  document.getElementById('org-popup-region').innerHTML =
+    `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${rColor};margin-right:4px;vertical-align:middle"></span>${loc.region} Region`;
+  document.getElementById('org-popup-areas').textContent = loc.areas ? `📍 ${loc.areas}` : '';
+  document.getElementById('org-popup-address').textContent = loc.address || '';
+
+  const container = document.querySelector('.map-container');
+  const rect = container.getBoundingClientRect();
+  let x = e.clientX - rect.left + 14;
+  let y = e.clientY - rect.top - 10;
+  if (x + 230 > rect.width) x -= 240;
+  popup.style.left = x + 'px';
+  popup.style.top  = y + 'px';
+  popup.style.display = 'block';
+}
+
+// Add a legend for the org marker types to the map
+function updateOrgLegendOnMap() {
+  // This is handled via the button text and the popup on hover
+}
+
+function syncRouteViewBox() {
+  const mapVB = document.getElementById('map-svg').getAttribute('viewBox');
+  if (routeActive) {
+    document.getElementById('route-svg').setAttribute('viewBox', mapVB);
+  }
+  if (orgLocationsVisible) {
+    document.getElementById('org-svg').setAttribute('viewBox', mapVB);
+  }
+}
+
+// ─── ROUTE OPTIMIZER (All Regions) ───────────────────────────────
+
+// Home base for each region (training center location)
+// fixedStops = guaranteed meeting locations pre-seeded into every route
+const REGION_HOME_BASES = [
+  { regionIdx:0, regionName:'Northeast',     name:'Northeast Training Center',
+    lat:40.8204, lng:-72.9968,
+    fixedStops:[
+      { label:'Campus', name:'Northeast Training Center', lat:40.8204, lng:-72.9968 },
+    ]},
+  { regionIdx:1, regionName:'North Central', name:'North Central Training Center',
+    lat:40.0909, lng:-82.8068,
+    fixedStops:[
+      { label:'Campus', name:'North Central Training Center', lat:40.0909, lng:-82.8068 },
+    ]},
+  { regionIdx:2, regionName:'Southeast',     name:'Southeast Training Center',
+    lat:28.5794, lng:-81.4874,
+    fixedStops:[
+      { label:'Campus', name:'Southeast Training Center', lat:28.5794, lng:-81.4874 },
+    ]},
+  { regionIdx:3, regionName:'South Central', name:'South Central Training Center',
+    lat:32.8998, lng:-97.0390,
+    fixedStops:[
+      { label:'Campus', name:'South Central Training Center', lat:32.8998, lng:-97.0390 },
+    ]},
+  { regionIdx:4, regionName:'Southwest',     name:'Southwest Training Center',
+    lat:33.1959, lng:-117.3228,
+    fixedStops:[
+      { label:'Campus', name:'Southwest Training Center', lat:33.1959, lng:-117.3228 },
+    ]},
+  { regionIdx:5, regionName:'Northwest',     name:'Northwest Training Center',
+    lat:38.4188, lng:-122.7186,
+    fixedStops:[
+      { label:'Campus',       name:'Northwest Training Center & HQ', lat:38.4188, lng:-122.7186 },
+      { label:'Field Office', name:'Puget Sound Field Office', lat:47.5793, lng:-122.3336 },
+    ]},
+];
+
+const RADIUS_SVG_PX = 60;
+const RADIUS_MILES  = 150;
+
+let routeStops       = [];
+let routeActive      = false;
+let activeRouteRegion = null; // index 0-5
+
+function getHomeSvgCoords(home) {
+  if (!albersProjection) return { svgX: 0, svgY: 0 };
+  const pt = albersProjection([home.lng, home.lat]);
+  return { svgX: pt?.[0] ?? 0, svgY: pt?.[1] ?? 0 };
+}
+
+function openRouteOptimizer() {
+  if (!mapLoaded) {
+    alert('Please wait for the map to finish loading.');
+    return;
+  }
+  if (Object.keys(clientData).length === 0) {
+    alert('Please upload your Salesforce CSV first.');
+    return;
+  }
+  // Show region picker modal
+  const modal = document.getElementById('route-region-modal');
+  modal.style.display = 'flex';
+}
+
+function launchRouteForRegion(regionIdx) {
+  document.getElementById('route-region-modal').style.display = 'none';
+  activeRouteRegion = regionIdx;
+
+  const home = REGION_HOME_BASES[regionIdx];
+  routeStops = computeRoute(regionIdx, home);
+  renderRouteOnMap(home);
+  renderRoutePanel(home);
+
+  // Zoom to the selected region
+  activeRegion = String(regionIdx);
+  activeState  = 'all';
+  updateRegionFilters();
+  updateStateList();
+  updateActiveChips();
+  updateStats();
+  updateContextLegend();
+  colorMap();
+  zoomToSelection();
+
+  document.getElementById('route-panel').classList.add('open');
+  document.getElementById('route-svg').style.display = '';
+  routeActive = true;
+}
+
+function closeRoutePanel() {
+  document.getElementById('route-panel').classList.remove('open');
+  document.getElementById('route-svg').style.display = 'none';
+  routeActive = false;
+  routeStops  = [];
+  activeRouteRegion = null;
+}
+
+// ── Core algorithm ────────────────────────────────────────────────
+function computeRoute(regionIdx, home) {
+  const { svgX: homeX, svgY: homeY } = getHomeSvgCoords(home);
+
+  // Collect all counties in this region that have clients
+  const regionCounties = [];
+  Object.entries(clientData).forEach(([key, info]) => {
+    if (info.regionIdx !== regionIdx) return;
+    const fips = findFips(info.county, info.state);
+    if (!fips) return;
+    const feature = allCountyFeatures.find(f => String(f.id) === String(fips));
+    if (!feature) return;
+    const [cx, cy] = geoPathFn.centroid(feature);
+    if (isNaN(cx) || isNaN(cy)) return;
+    regionCounties.push({ key, info, fips, cx, cy });
+  });
+
+  if (!regionCounties.length) return [];
+
+  // Pre-seed clusters at every fixed stop location (campus + field offices)
+  // Their cx/cy are locked — they never drift from the actual location
+  const clusters = home.fixedStops.map(fs => {
+    const pt = albersProjection([fs.lng, fs.lat]);
+    const cx = pt?.[0] ?? homeX;
+    const cy = pt?.[1] ?? homeY;
+    return {
+      counties: [],
+      cx, cy,
+      fixedX: cx, fixedY: cy, // never mutated
+      isFixed: true,
+      fixedLabel: fs.label,
+      fixedName:  fs.name,
+      clients: 0,
+    };
+  });
+
+  // Sort counties by distance from home base outward
+  regionCounties.sort((a, b) => dist(a.cx, a.cy, homeX, homeY)
+                               - dist(b.cx, b.cy, homeX, homeY));
+
+  // Greedy clustering — fixed clusters get first pick
+  const assigned = new Set();
+  regionCounties.forEach(county => {
+    if (assigned.has(county.key)) return;
+    let bestCluster = null, bestD = Infinity;
+    clusters.forEach(cl => {
+      // For fixed clusters use their locked coords; dynamic use current centroid
+      const clX = cl.isFixed ? cl.fixedX : cl.cx;
+      const clY = cl.isFixed ? cl.fixedY : cl.cy;
+      const d = dist(county.cx, county.cy, clX, clY);
+      if (d <= RADIUS_SVG_PX && d < bestD) { bestD = d; bestCluster = cl; }
+    });
+    if (bestCluster) {
+      bestCluster.counties.push(county);
+      assigned.add(county.key);
+      if (!bestCluster.isFixed) recomputeCentroid(bestCluster);
+      // Fixed clusters keep their locked coords
+    } else {
+      const cl = { counties: [county], cx: county.cx, cy: county.cy, clients: 0, isFixed: false };
+      assigned.add(county.key);
+      clusters.push(cl);
+    }
+  });
+
+  // Refinement passes (only move counties between dynamic clusters, not away from fixed)
+  let changed = true, passes = 0;
+  while (changed && passes < 5) {
+    changed = false; passes++;
+    regionCounties.forEach(county => {
+      const cur = clusters.find(cl => cl.counties.includes(county));
+      if (!cur) return;
+      clusters.forEach(cl => {
+        if (cl === cur) return;
+        const clX = cl.isFixed ? cl.fixedX : cl.cx;
+        const clY = cl.isFixed ? cl.fixedY : cl.cy;
+        const curX = cur.isFixed ? cur.fixedX : cur.cx;
+        const curY = cur.isFixed ? cur.fixedY : cur.cy;
+        if (dist(county.cx, county.cy, clX, clY) <= RADIUS_SVG_PX &&
+            dist(county.cx, county.cy, clX, clY) < dist(county.cx, county.cy, curX, curY)) {
+          cur.counties = cur.counties.filter(c => c !== county);
+          cl.counties.push(county);
+          if (!cur.isFixed) recomputeCentroid(cur);
+          // fixed clusters keep their coords
+          changed = true;
+        }
+      });
+    });
+  }
+
+  // Include ALL clusters — fixed stops always appear even with 0 clients in range
+  const allClusters = clusters.filter(cl => cl.isFixed || cl.counties.length > 0);
+  allClusters.forEach(cl => { if (!cl.isFixed) recomputeCentroid(cl); });
+
+  // Nearest-neighbor TSP from home base
+  const ordered = [];
+  const remaining = [...allClusters];
+  let current = { cx: homeX, cy: homeY };
+  while (remaining.length) {
+    let nearestIdx = 0, nearestD = Infinity;
+    remaining.forEach((cl, i) => {
+      const clX = cl.isFixed ? cl.fixedX : cl.cx;
+      const clY = cl.isFixed ? cl.fixedY : cl.cy;
+      const d = dist(current.cx, current.cy, clX, clY);
+      if (d < nearestD) { nearestD = d; nearestIdx = i; }
+    });
+    const next = remaining.splice(nearestIdx, 1)[0];
+    ordered.push(next);
+    current = { cx: next.isFixed ? next.fixedX : next.cx,
+                cy: next.isFixed ? next.fixedY : next.cy };
+  }
+
+  return ordered.map((cl, i) => {
+    const totalClients  = cl.counties.reduce((s, c) => s + c.info.count, 0);
+    const countyNames   = cl.counties
+      .sort((a, b) => b.info.count - a.info.count)
+      .map(c => `${c.info.county}, ${c.info.state} (${c.info.count})`);
+    const cx = cl.isFixed ? cl.fixedX : cl.cx;
+    const cy = cl.isFixed ? cl.fixedY : cl.cy;
+    const prevCl = i === 0 ? null : ordered[i-1];
+    const prevX  = i === 0 ? homeX : (prevCl.isFixed ? prevCl.fixedX : prevCl.cx);
+    const prevY  = i === 0 ? homeY : (prevCl.isFixed ? prevCl.fixedY : prevCl.cy);
+    const hubName = cl.isFixed
+      ? cl.fixedName
+      : (cl.counties.length
+          ? `${cl.counties.reduce((a,b) => a.info.count > b.info.count ? a : b).info.county} County, ${cl.counties.reduce((a,b) => a.info.count > b.info.count ? a : b).info.state}`
+          : 'Unknown');
+    return {
+      stopNum: i + 1,
+      cx, cy,
+      totalClients,
+      countyNames,
+      hubName,
+      driveFromPrev: estDriveHours(prevX, prevY, cx, cy),
+      counties: cl.counties,
+      isFixed:    cl.isFixed  || false,
+      fixedLabel: cl.fixedLabel || null,
+    };
+  });
+}
+
+function recomputeCentroid(cl) {
+  if (!cl.counties.length) return;
+  const total = cl.counties.reduce((s, c) => s + c.info.count, 0) || cl.counties.length;
+  cl.cx = cl.counties.reduce((s, c) => s + c.cx * c.info.count, 0) / total;
+  cl.cy = cl.counties.reduce((s, c) => s + c.cy * c.info.count, 0) / total;
+  cl.clients = total;
+}
+
+function dist(x1, y1, x2, y2) {
+  return Math.sqrt((x2-x1)**2 + (y2-y1)**2);
+}
+
+function estDriveHours(x1, y1, x2, y2) {
+  const miles = dist(x1, y1, x2, y2) * 2.5;
+  return (miles / 55).toFixed(1);
+}
+
+// ── Render SVG overlay ────────────────────────────────────────────
+function renderRouteOnMap(home) {
+  const svg = document.getElementById('route-svg');
+  svg.innerHTML = '';
+  if (!routeStops.length) return;
+
+  const mapVB = document.getElementById('map-svg').getAttribute('viewBox');
+  svg.setAttribute('viewBox', mapVB);
+
+  const { svgX: homeX, svgY: homeY } = getHomeSvgCoords(home);
+
+  // Coverage radius circles — only for non-fixed stops
+  routeStops.forEach(stop => {
+    if (stop.isFixed) return;
+    const circle = document.createElementNS('http://www.w3.org/2000/svg','circle');
+    circle.setAttribute('cx', stop.cx); circle.setAttribute('cy', stop.cy);
+    circle.setAttribute('r', RADIUS_SVG_PX);
+    circle.setAttribute('class', 'route-radius');
+    svg.appendChild(circle);
+  });
+
+  // Also draw radius for fixed stops (campus/field office serve nearby clients)
+  routeStops.forEach(stop => {
+    if (!stop.isFixed) return;
+    const circle = document.createElementNS('http://www.w3.org/2000/svg','circle');
+    circle.setAttribute('cx', stop.cx); circle.setAttribute('cy', stop.cy);
+    circle.setAttribute('r', RADIUS_SVG_PX);
+    circle.setAttribute('class', 'route-radius');
+    circle.style.stroke = '#0073FF';
+    circle.style.fill   = 'rgba(0,115,255,0.04)';
+    svg.appendChild(circle);
+  });
+
+  // Route lines — start from home base, connect all stops in order
+  const allPoints = [{ cx: homeX, cy: homeY }, ...routeStops];
+  for (let i = 0; i < allPoints.length - 1; i++) {
+    const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+    line.setAttribute('x1', allPoints[i].cx); line.setAttribute('y1', allPoints[i].cy);
+    line.setAttribute('x2', allPoints[i+1].cx); line.setAttribute('y2', allPoints[i+1].cy);
+    line.setAttribute('class', 'route-line');
+    svg.appendChild(line);
+  }
+
+  // Draw home base departing marker (only if campus is NOT already stop 1)
+  const campusIsStop1 = routeStops[0]?.isFixed && routeStops[0]?.fixedLabel === 'Campus';
+  if (!campusIsStop1) {
+    const homeG = document.createElementNS('http://www.w3.org/2000/svg','g');
+    const homeCircle = document.createElementNS('http://www.w3.org/2000/svg','circle');
+    homeCircle.setAttribute('cx', homeX); homeCircle.setAttribute('cy', homeY);
+    homeCircle.setAttribute('r', 9);
+    homeCircle.setAttribute('class', 'route-marker home-marker');
+    const homeLabel = document.createElementNS('http://www.w3.org/2000/svg','text');
+    homeLabel.setAttribute('x', homeX); homeLabel.setAttribute('y', homeY);
+    homeLabel.setAttribute('class', 'route-label');
+    homeLabel.textContent = '🏠';
+    homeG.appendChild(homeCircle); homeG.appendChild(homeLabel);
+    svg.appendChild(homeG);
+  }
+
+  // Stop markers
+  routeStops.forEach(stop => {
+    const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+    g.style.cursor = 'pointer';
+    g.addEventListener('click', () => scrollToStop(stop.stopNum));
+
+    if (stop.isFixed) {
+      // Fixed stops: blue square for campus, yellow square for field office
+      const isFieldOffice = stop.fixedLabel === 'Field Office';
+      const fillColor   = isFieldOffice ? '#FECB00' : '#0073FF';
+      const strokeColor = isFieldOffice ? '#c9a000' : 'white';
+      const rect = document.createElementNS('http://www.w3.org/2000/svg','rect');
+      rect.setAttribute('x', stop.cx - 9); rect.setAttribute('y', stop.cy - 9);
+      rect.setAttribute('width', '18'); rect.setAttribute('height', '18');
+      rect.setAttribute('rx', '4');
+      rect.setAttribute('fill', fillColor);
+      rect.setAttribute('stroke', strokeColor);
+      rect.setAttribute('stroke-width', '2');
+      const label = document.createElementNS('http://www.w3.org/2000/svg','text');
+      label.setAttribute('x', stop.cx); label.setAttribute('y', stop.cy + 1);
+      label.setAttribute('class', 'route-label');
+      label.setAttribute('fill', isFieldOffice ? '#425563' : 'white');
+      label.textContent = stop.stopNum;
+      g.appendChild(rect); g.appendChild(label);
+    } else {
+      // Regular stops: purple circles
+      const circle = document.createElementNS('http://www.w3.org/2000/svg','circle');
+      circle.setAttribute('cx', stop.cx); circle.setAttribute('cy', stop.cy);
+      circle.setAttribute('r', 10);
+      circle.setAttribute('class', 'route-marker');
+      const label = document.createElementNS('http://www.w3.org/2000/svg','text');
+      label.setAttribute('x', stop.cx); label.setAttribute('y', stop.cy + 1);
+      label.setAttribute('class', 'route-label');
+      label.textContent = stop.stopNum;
+      g.appendChild(circle); g.appendChild(label);
+    }
+    svg.appendChild(g);
+  });
+}
+
+// ── Render panel ──────────────────────────────────────────────────
+function renderRoutePanel(home) {
+  const list    = document.getElementById('route-stop-list');
+  const summary = document.getElementById('route-summary');
+  const sub     = document.getElementById('route-panel-sub');
+  const title   = document.querySelector('.route-panel-title');
+  list.innerHTML = '';
+
+  const nonFixedStops  = routeStops.filter(s => !s.isFixed);
+  const totalClients   = routeStops.reduce((s, st) => s + st.totalClients, 0);
+  const totalStops     = routeStops.length;
+  title.textContent    = `🗺️ ${home.regionName} Route`;
+  sub.textContent      = `${totalStops} stop${totalStops !== 1 ? 's' : ''} · ${totalClients} clients covered`;
+
+  // Legend for marker types
+  const legend = document.createElement('div');
+  legend.style.cssText = 'display:flex;gap:12px;padding:8px 16px 6px;border-bottom:1px solid #f0f4f8;flex-wrap:wrap';
+  const fixedCount = home.fixedStops.length;
+  legend.innerHTML = `
+    <span style="display:flex;align-items:center;gap:5px;font-size:0.64rem;color:var(--muted)">
+      <span style="width:14px;height:14px;background:#0073FF;border-radius:3px;flex-shrink:0;display:inline-block"></span>Campus
+    </span>
+    ${fixedCount > 1 ? `<span style="display:flex;align-items:center;gap:5px;font-size:0.64rem;color:var(--muted)">
+      <span style="width:14px;height:14px;background:#FECB00;border-radius:3px;flex-shrink:0;display:inline-block;border:1px solid #c9a000"></span>Field Office
+    </span>` : ''}
+    <span style="display:flex;align-items:center;gap:5px;font-size:0.64rem;color:var(--muted)">
+      <span style="width:14px;height:14px;background:#6a0dad;border-radius:50%;flex-shrink:0;display:inline-block"></span>Meeting Stop
+    </span>`;
+  list.appendChild(legend);
+
+  if (!routeStops.length) {
+    const empty = document.createElement('div');
+    empty.style.cssText = 'padding:24px 16px;text-align:center;color:var(--muted);font-size:0.75rem;line-height:1.8';
+    empty.innerHTML = '📭 No client data found for this region.<br>Upload your Salesforce CSV to generate a route.';
+    list.appendChild(empty);
+    summary.innerHTML = '';
+    return;
+  }
+
+  routeStops.forEach(stop => {
+    const row = document.createElement('div');
+    row.className = 'route-stop-row';
+    row.id = `route-stop-${stop.stopNum}`;
+    row.addEventListener('click', () => {
+      zoomToViewBox({ x: stop.cx - 80, y: stop.cy - 60, w: 160, h: 120 });
+      document.getElementById('zoom-out-btn').classList.add('visible');
+    });
+
+    const countiesHtml = stop.countyNames.length
+      ? stop.countyNames.slice(0,5).join('<br>') +
+        (stop.countyNames.length > 5 ? `<br><em>+${stop.countyNames.length - 5} more</em>` : '')
+      : '<em style="color:var(--muted)">Clients may travel from surrounding counties</em>';
+
+    let badge, stopLabel, stopMeta, stopExtra;
+
+    if (stop.isFixed) {
+      const isFieldOffice = stop.fixedLabel === 'Field Office';
+      const bgColor = isFieldOffice ? '#FECB00' : '#0073FF';
+      const txtColor = isFieldOffice ? '#425563' : 'white';
+      badge     = `<div class="stop-badge" style="background:${bgColor};color:${txtColor};border-radius:4px">${stop.stopNum}</div>`;
+      stopLabel = `<span style="font-size:0.6rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:${isFieldOffice ? '#c9a000' : '#0073FF'};background:${isFieldOffice ? 'rgba(254,203,0,0.15)' : 'rgba(0,115,255,0.08)'};border-radius:3px;padding:1px 5px;margin-left:6px">${stop.fixedLabel}</span>`;
+      stopMeta  = `~${stop.driveFromPrev}hr from ${stop.stopNum === 1 ? 'home base' : `stop ${stop.stopNum - 1}`}`;
+      stopExtra = stop.totalClients > 0
+        ? `<div class="stop-clients">👥 ${stop.totalClients} client${stop.totalClients !== 1 ? 's' : ''} within ~${RADIUS_MILES}mi</div>
+           <div class="stop-counties">${countiesHtml}</div>`
+        : `<div style="font-size:0.66rem;color:var(--muted);margin-top:3px;font-style:italic">Fixed location — clients from nearby counties</div>`;
+    } else {
+      badge     = `<div class="stop-badge">${stop.stopNum}</div>`;
+      stopLabel = '';
+      stopMeta  = `~${stop.driveFromPrev}hr from ${stop.stopNum === 1 ? 'home base' : `stop ${stop.stopNum - 1}`}`;
+      stopExtra = `<div class="stop-clients">👥 ${stop.totalClients} client${stop.totalClients !== 1 ? 's' : ''} within ~${RADIUS_MILES}mi</div>
+                   <div class="stop-counties">${countiesHtml}</div>`;
+    }
+
+    row.innerHTML = `
+      ${badge}
+      <div class="stop-details">
+        <div class="stop-name">Stop ${stop.stopNum} — ${stop.hubName}${stopLabel}</div>
+        <div class="stop-meta">${stopMeta}</div>
+        ${stopExtra}
+      </div>`;
+    list.appendChild(row);
+  });
+
+  const totalDrive = routeStops.reduce((s, st) => s + parseFloat(st.driveFromPrev), 0).toFixed(1);
+  const fixedLabels = home.fixedStops.map(fs => fs.label).join(' + ');
+  summary.innerHTML = `
+    <strong>${totalStops} stops</strong> (incl. ${fixedLabels}) · <strong>${totalClients} clients</strong><br>
+    ~${totalDrive}hr total drive · All within <strong>~${RADIUS_MILES}mi</strong> of a stop<br>
+    <span style="color:var(--muted);font-size:0.63rem">Click any stop to zoom · Blue/yellow = fixed locations</span>`;
+}
+
+function scrollToStop(num) {
+  const el = document.getElementById(`route-stop-${num}`);
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+
+document.addEventListener('DOMContentLoaded', () => {
+  // Populate route region picker
+  const btnContainer = document.getElementById('route-region-buttons');
+  REGION_HOME_BASES.forEach(home => {
+    const rColor = REGION_COLORS[home.regionIdx];
+    const btn = document.createElement('button');
+    btn.style.cssText = `display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:8px;border:1px solid ${rColor};background:transparent;cursor:pointer;font-family:Poppins,sans-serif;font-size:0.78rem;font-weight:500;color:${rColor};transition:all 0.15s;text-align:left`;
+    btn.innerHTML = `<span style="width:10px;height:10px;border-radius:50%;background:${rColor};flex-shrink:0"></span><span style="flex:1">${home.regionName}</span><span style="font-size:0.65rem;color:var(--muted);font-weight:400">${home.name}</span>`;
+    btn.onmouseenter = () => btn.style.background = `rgba(${parseInt(rColor.slice(1,3),16)},${parseInt(rColor.slice(3,5),16)},${parseInt(rColor.slice(5,7),16)},0.08)`;
+    btn.onmouseleave = () => btn.style.background = 'transparent';
+    btn.onclick = () => launchRouteForRegion(home.regionIdx);
+    btnContainer.appendChild(btn);
+  });
+
+  // Build initial density legend
+  buildDensityLegend();
+
+  function waitAndLoad(attempts) {
+    if (typeof d3 !== 'undefined' && typeof topojson !== 'undefined') {
+      loadMap();
+    } else if (attempts > 0) {
+      setTimeout(() => waitAndLoad(attempts - 1), 100);
+    } else {
+      document.getElementById('loading').innerHTML = `
+        <div style="text-align:center;padding:20px;max-width:340px">
+          <div style="color:#1a2a3a;font-weight:600;margin-bottom:8px">Libraries failed to load</div>
+          <div style="color:#6b7e8f;font-size:0.78rem">Please check your internet connection and refresh.</div>
+        </div>`;
+    }
+  }
+  waitAndLoad(30);
+});
+</script>
+</body>
+</html>
